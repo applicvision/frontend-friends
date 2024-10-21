@@ -1,0 +1,37 @@
+{
+  "name": "@applicvision/frontend-friends",
+  "version": "1.0.0",
+  "description": "Build frontend easily",
+  "type": "module",
+  "repository": "github:applicvision/frontend-friends",
+  "exports": {
+    ".": "./src/index.js",
+    "./declarative-element": "./src/declarative-element.js",
+    "./island": "./src/dynamic-island.js",
+    "./store": "./src/store.js",
+    "./parse-shape": "./src/parse-shape.js",
+    "./deep-watch": "./src/deep-watch.js",
+    "./attribute-helpers": "./src/attribute-helpers.js",
+    "./router": "./src/router/router.js",
+    "./base-router": "./src/router/base-router.js",
+    "./browser-router": "./src/router/browser-router.js",
+    "./router/dynamic-island": "./src/router/dynamic-island.js",
+    "./router/router-link": "./src/router/router-link.js",
+    "./dynamic-fragment": "./src/dynamic-fragment.js"
+  },
+  "scripts": {
+    "tdd": "test-browser --watch test --watch src",
+    "node-test": "node --test **/*.nodetest.js",
+    "node-tdd": "node --watch --test **/*.nodetest.js"
+  },
+  "files": [
+    "src"
+  ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "devDependencies": {
+    "@applicvision/js-toolbox": "latest",
+    "@playwright/test": "^1.41.2"
+  }
+}
