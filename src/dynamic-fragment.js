@@ -18,8 +18,7 @@ const attributePrefix = 'data-reactive'
 */
 
 /**
- * @template {string|number|boolean|null} T
- * @typedef {{get: () => T, set: (newValue: T, event: Event) => void}} TwowayBinding
+ * @typedef {{get: () => any, set: (newValue: any, event: Event) => void}} TwowayBinding
  */
 
 /**
@@ -46,7 +45,7 @@ const escapeEntries = Object.entries(escapeCharacters)
 
 /**
  * @param {TemplateStringsArray} strings
- * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} values
+ * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
  */
 export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
@@ -90,42 +89,48 @@ export class PropertySetter {
 }
 
 
-/** @type {Map<object, Map<string|number|symbol, TwowayBinding<any>>>} */
-const twowayBindingCache = new Map()
+/** @type {Map<object, Map<string|number|symbol, TwowayBinding>>} */
+// cache?
+// const twowayBindingCache = new Map()
+
+/** 
+ * @template {{[key: string]: any}} T 
+ * @implements {TwowayBinding}
+ **/
+class Twoway {
+
+	/** @type {T} */
+	#stateContainer
+
+	/** @type {keyof T} */
+	#property
+
+	/**
+	 * @param {T} state
+	 * @param {keyof T} property
+	 */
+	constructor(state, property) {
+		this.#stateContainer = state
+		this.#property = property
+	}
+
+	get() {
+		return this.#stateContainer[this.#property]
+	}
+	/** @param {any} newValue */
+	set(newValue) {
+		this.#stateContainer[this.#property] = newValue
+	}
+}
 
 /**
  * @template {{[key: string]: any}} T
  * @param {T} state
  * @param {keyof state} property
- * @return {TwowayBinding<any>}
+ * @return {TwowayBinding}
  */
 export function twoway(state, property) {
-	return {
-		get() {
-			return state[property]
-		},
-		set(newValue) {
-			state[property] = newValue
-		}
-	}
-	// let stateCache = twowayBindingCache.get(state)
-	// if (!stateCache) {
-	// 	stateCache = new Map()
-	// 	twowayBindingCache.set(state, new Map())
-	// }
-	// let cachedTwoway = stateCache.get(property)
-	// if (!cachedTwoway) {
-	// 	cachedTwoway = {
-	// 		get() {
-	// 			return state[property]
-	// 		},
-	// 		set(newValue) {
-	// 			state[property] = newValue
-	// 		}
-	// 	}
-	// 	// stateCache.set(property, cachedTwoway)
-	// }
-	// return cachedTwoway
+	return new Twoway(state, property)
 }
 
 
@@ -172,7 +177,7 @@ export class DynamicFragment {
 	/** @type {TemplateStringsArray} */
 	strings
 
-	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} */
+	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} */
 	#values
 
 	/** @type {any} */
@@ -180,7 +185,7 @@ export class DynamicFragment {
 
 	/**
 	 * @param {TemplateStringsArray} strings
-	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} values
+	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
 	 */
 	constructor(strings, values) {
 		this.strings = strings
@@ -429,32 +434,15 @@ export class DynamicFragment {
 			}
 
 			if (locator.type == 'ff-bind') {
+				/** @type {TwowayBinding} */
+				const binding = this.values[locator.index]
 
-				if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
-
-					/** @type {TwowayBinding<any>} */
-					const twoWayBinding = this.values[locator.index]
-
-					const boundValue = twoWayBinding.get()
-
-					switch (element.type) {
-						case 'checkbox':
-							if (typeof boundValue == 'boolean') {
-								element.checked = boundValue
-							} else if (boundValue instanceof Set) {
-								element.checked = boundValue.has(element.name)
-							} else if (boundValue instanceof Array) {
-								element.checked = boundValue.includes(element.name)
-							}
-							break
-						case 'radio':
-							element.checked = boundValue == element.value
-							break
-						case 'text':
-						case 'select-one':
-							element.value = boundValue
-					}
-
+				if (
+					element instanceof HTMLInputElement ||
+					element instanceof HTMLSelectElement ||
+					element instanceof HTMLTextAreaElement
+				) {
+					this.#updateNativeInputElement(binding.get(), element)
 
 					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
 				} else {
@@ -485,60 +473,67 @@ export class DynamicFragment {
 
 	/**
 	 * @param {AttributeLocator} locator
-	 * @param {HTMLInputElement|HTMLSelectElement} element
+	 * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
 	 * @param {Event} event
 	 */
 	#handleNativeInputEvent(locator, element, event) {
-		/** @type {TwowayBinding<any>} */
+		/** @type {TwowayBinding} */
 		const binding = this.values[locator.index]
 
-		switch (element.type) {
-			case 'checkbox':
-				const valueBefore = binding.get()
-				if (valueBefore instanceof Set) {
-					const newSet = new Set(valueBefore)
-					element.checked ?
-						newSet.add(element.name) :
-						newSet.delete(element.name)
-					return binding.set(newSet, event)
-				}
-				if (valueBefore instanceof Array) {
-					// TODO
-				}
-				binding.set(element.checked, event)
-				break
-			default:
-				binding.set(element.value, event)
+		if (element instanceof HTMLInputElement && element.type == 'checkbox') {
+			const valueBefore = binding.get()
+			if (valueBefore instanceof Set) {
+				const newSet = new Set(valueBefore)
+				element.checked ?
+					newSet.add(element.name) :
+					newSet.delete(element.name)
+				return binding.set(newSet, event)
+			}
+			if (valueBefore instanceof Array) {
+				const indexBefore = valueBefore.indexOf(element.name)
+				const newArrayValue = element.checked ?
+					valueBefore.concat(element.name) :
+					valueBefore.toSpliced(indexBefore, 1)
+				return binding.set(newArrayValue, event)
+			}
+			binding.set(element.checked, event)
+		} else if (element instanceof HTMLSelectElement && element.type == 'select-multiple') {
+			const selected = []
+			for (const option of element.selectedOptions) {
+				selected.push(option.value)
+			}
+			binding.set(selected, event)
+		} else {
+			binding.set(element.value, event)
 		}
 	}
 
 	/**
-	 * @param {AttributeLocator} locator
-	 * @param {HTMLInputElement|HTMLSelectElement} element
+	 * @param {any} newValue
+	 * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
 	 */
-	#updateNativeInputElement(locator, element) {
+	#updateNativeInputElement(newValue, element) {
 		// document.activeElement == element
-		/** @type {TwowayBinding<any>} */
-		const twoWayBinding = this.values[locator.index]
-
-		const boundValue = twoWayBinding.get()
 
 		switch (element.type) {
 			case 'checkbox':
-				if (typeof boundValue == 'boolean') {
-					element.checked = boundValue
-				} else if (boundValue instanceof Set) {
-					element.checked = boundValue.has(element.name)
-				} else if (boundValue instanceof Array) {
-					element.checked = boundValue.includes(element.name)
+				if (!(element instanceof HTMLInputElement)) break
+				if (typeof newValue == 'boolean') {
+					element.checked = newValue
+				} else if (newValue instanceof Set) {
+					element.checked = newValue.has(element.name)
+				} else if (newValue instanceof Array) {
+					element.checked = newValue.includes(element.name)
 				}
 				break
 			case 'radio':
-				element.checked = boundValue == element.value
+				if (!(element instanceof HTMLInputElement)) break
+				element.checked = newValue == element.value
 				break
 			case 'text':
+			case 'textarea':
 			case 'select-one':
-				element.value = boundValue
+				element.value = newValue
 		}
 	}
 
@@ -683,37 +678,6 @@ export class DynamicFragment {
 			const previousValue = oldValues[index]
 
 			if (value == previousValue) {
-				// two-way binding
-				if (typeof value?.get == 'function') {
-					/** @type {TwowayBinding<any>} */
-					const binding = value
-					const dynamicNode = this.#dynamicNodes[index]
-					if (dynamicNode.type != 'ff-bind') {
-						throw new Error('Can only use two way binding with ff-bind')
-					}
-					const newValue = binding.get()
-					if (dynamicNode.node instanceof HTMLInputElement || dynamicNode.node instanceof HTMLSelectElement) {
-						switch (dynamicNode.node.type) {
-							case 'checkbox':
-								if (typeof newValue == 'boolean') {
-									dynamicNode.node.checked = newValue
-								} else if (newValue instanceof Set) {
-									dynamicNode.node.checked = newValue.has(dynamicNode.node.name)
-								} else if (newValue instanceof Array) {
-									dynamicNode.node.checked = newValue.includes(dynamicNode.node.name)
-								}
-								break
-							case 'radio':
-								dynamicNode.node.checked = newValue == dynamicNode.node.value
-								break
-							case 'text':
-							case 'select-one':
-								dynamicNode.node.value = newValue
-						}
-					}
-
-
-				}
 				return
 			}
 
@@ -725,6 +689,17 @@ export class DynamicFragment {
 			const dynamicNode = this.#dynamicNodes[index]
 
 			switch (dynamicNode.type) {
+				case 'ff-bind':
+					/** @type {TwowayBinding} */
+					const binding = value
+					if (
+						dynamicNode.node instanceof HTMLInputElement ||
+						dynamicNode.node instanceof HTMLSelectElement ||
+						dynamicNode.node instanceof HTMLTextAreaElement
+					) {
+						this.#updateNativeInputElement(binding.get(), dynamicNode.node)
+					}
+					break
 				case 'attribute':
 					if (typeof value == 'boolean') {
 						dynamicNode.node.toggleAttribute(dynamicNode.attribute, value)
