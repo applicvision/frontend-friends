@@ -1,4 +1,4 @@
-const attributeRegex = /(?<attribute>[a-z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
+const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
 
 const commentPrefix = 'dynamic-fragment'
 const valueStartCommentPrefix = `${commentPrefix}:content:start:`
@@ -7,12 +7,20 @@ const arrayContentStartCommentPrefix = `${commentPrefix}:array:start:`
 const arrayContentEndCommentPrefix = `${commentPrefix}:array:end:`
 const propertyCommentPrefix = `${commentPrefix}:property:_:`
 
+const attributePrefix = 'data-reactive'
+
 /**
- * @typedef {{type: 'eventhandler', dataAttributeValue: string, index: number, event: string } |
+ * @typedef {{type: 'eventhandler', attribute: string, dataAttributeValue: string, index: number, event: string } |
  * {type: 'attributeExtension', index: number, associatedIndex: number, prefix: string, suffix: string, quotemark: '"'|"'"} |
- * {type: 'booleanAttribute', dataAttributeValue: string, index: number, attribute: string } |
- * {type: 'attribute', dataAttributeValue: string, quotemark: '"'|"'"|'', index: number, attribute: string, prefix: string, suffix: string}} AttributeLocator
+ * {type: 'booleanAttribute', attribute: string, dataAttributeValue: string, index: number } |
+ * {type: 'ff-bind', attribute: 'ff-bind', dataAttributeValue: string, index: number } |
+ * {type: 'attribute', attribute: string, dataAttributeValue: string, quotemark: '"'|"'"|'', index: number, prefix: string, suffix: string}} AttributeLocator
 */
+
+/**
+ * @template {string|number|boolean|null} T
+ * @typedef {{get: () => T, set: (newValue: T, event: Event) => void}} TwowayBinding
+ */
 
 /**
  * @param {string} inputString
@@ -38,7 +46,7 @@ const escapeEntries = Object.entries(escapeCharacters)
 
 /**
  * @param {TemplateStringsArray} strings
- * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|null|undefined)[]} values
+ * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} values
  */
 export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
@@ -82,6 +90,65 @@ export class PropertySetter {
 }
 
 
+/** @type {Map<object, Map<string|number|symbol, TwowayBinding<any>>>} */
+const twowayBindingCache = new Map()
+
+/**
+ * @template {{[key: string]: any}} T
+ * @param {T} state
+ * @param {keyof state} property
+ * @return {TwowayBinding<any>}
+ */
+export function twoway(state, property) {
+	return {
+		get() {
+			return state[property]
+		},
+		set(newValue) {
+			state[property] = newValue
+		}
+	}
+	// let stateCache = twowayBindingCache.get(state)
+	// if (!stateCache) {
+	// 	stateCache = new Map()
+	// 	twowayBindingCache.set(state, new Map())
+	// }
+	// let cachedTwoway = stateCache.get(property)
+	// if (!cachedTwoway) {
+	// 	cachedTwoway = {
+	// 		get() {
+	// 			return state[property]
+	// 		},
+	// 		set(newValue) {
+	// 			state[property] = newValue
+	// 		}
+	// 	}
+	// 	// stateCache.set(property, cachedTwoway)
+	// }
+	// return cachedTwoway
+}
+
+
+/**
+ * @param {Element|DocumentFragment|ShadowRoot|null} referenceElement
+ * @param {Exclude<AttributeLocator, {type: 'attributeExtension'}>} locator
+ */
+function locateElement(referenceElement, locator) {
+	const dataAttribute = `${attributePrefix}-${locator.attribute}`
+
+
+	if (referenceElement instanceof HTMLElement &&
+		referenceElement.getAttribute(dataAttribute) == locator.dataAttributeValue) {
+
+		referenceElement.removeAttribute(dataAttribute)
+		return referenceElement
+	}
+	const element = referenceElement?.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
+	element?.removeAttribute(dataAttribute)
+
+	return element
+}
+
 export class DynamicFragment {
 
 	/**
@@ -89,6 +156,7 @@ export class DynamicFragment {
 	 * 	{type: 'content', start: Comment, end: Comment, currentFragment?: DynamicFragment} |
 	 * 	{type: 'array', start: Comment, end: Comment, current: DynamicFragment[]} |
 	 * 	{type: 'property', element: HTMLElement} |
+	 * 	{type: 'ff-bind', node: Element} |
 	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
 	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
 	 * 	{type: 'attributeExtension', prefix: string, suffix: string, associatedIndex: number} |
@@ -104,7 +172,7 @@ export class DynamicFragment {
 	/** @type {TemplateStringsArray} */
 	strings
 
-	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|null|undefined)[]} */
+	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} */
 	#values
 
 	/** @type {any} */
@@ -112,7 +180,7 @@ export class DynamicFragment {
 
 	/**
 	 * @param {TemplateStringsArray} strings
-	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|null|undefined)[]} values
+	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding<any>|null|undefined)[]} values
 	 */
 	constructor(strings, values) {
 		this.strings = strings
@@ -190,6 +258,19 @@ export class DynamicFragment {
 					}
 				}
 
+				if (attribute == 'ff-bind') {
+					if (typeof value?.get != 'function' || typeof value?.set != 'function') {
+						throw new Error('ff-bind must use a two way binding (get and set function)')
+					}
+					htmlResult += part.slice(0, -attributeMatch[0].length)
+
+					const dataAttributeValue = indexPathPrefix + index
+
+					htmlResult += `${attributePrefix}-${attribute}=${quotemark ?? ''}${dataAttributeValue}`
+					attributeLocators[index] = { type: 'ff-bind', attribute, index, dataAttributeValue }
+					return
+				}
+
 				if (attribute.startsWith('on')) {
 					if (typeof value != 'function') {
 						throw new Error('Only functions are supported as event handlers')
@@ -199,8 +280,8 @@ export class DynamicFragment {
 
 					const dataAttributeValue = indexPathPrefix + index
 
-					htmlResult += `data-${eventName}-event-handler=${quotemark ?? ''}${dataAttributeValue}`
-					attributeLocators[index] = { type: 'eventhandler', index, event: eventName, dataAttributeValue }
+					htmlResult += `${attributePrefix}-${attribute}=${quotemark ?? ''}${dataAttributeValue}`
+					attributeLocators[index] = { type: 'eventhandler', attribute, index, event: eventName, dataAttributeValue }
 					return
 				}
 
@@ -218,14 +299,20 @@ export class DynamicFragment {
 						htmlResult += attribute
 					}
 					const dataAttributeValue = indexPathPrefix + index
-					htmlResult += ` data-reactive-${attribute}=${quotemark || ''}${dataAttributeValue}`
-					attributeLocators[index] = { type: 'booleanAttribute', index, attribute, dataAttributeValue }
+					htmlResult += ` ${attributePrefix}-${attribute}=${quotemark || ''}${dataAttributeValue}`
+
+					attributeLocators[index] = {
+						type: 'booleanAttribute',
+						index,
+						attribute: attribute.toLowerCase(),
+						dataAttributeValue
+					}
 				} else if (typeof value == 'number' || typeof value == 'string' || value == null) {
 					if (value == null) {
 						console.warn('Passed', value, 'to attribute', attribute)
 					}
 					const dataAttributeValue = indexPathPrefix + index
-					htmlResult += `data-reactive-${attribute}=${dataAttributeValue}`
+					htmlResult += `${attributePrefix}-${attribute}=${dataAttributeValue}`
 					let attributeValue = prefix + escapeHtml(String(value ?? ''))
 					if (quotemark) {
 						attributeValue = attributeValue.replaceAll(quotemark, quoteEscape[quotemark])
@@ -234,7 +321,15 @@ export class DynamicFragment {
 					}
 					htmlResult += ` ${attribute}=${quotemark}${attributeValue}`
 
-					attributeLocators[index] = { type: 'attribute', attribute, quotemark, index, prefix, suffix, dataAttributeValue }
+					attributeLocators[index] = {
+						type: 'attribute',
+						attribute: attribute.toLowerCase(),
+						quotemark,
+						index,
+						prefix,
+						suffix,
+						dataAttributeValue
+					}
 				} else {
 					throw new Error(`Illegal attribute value: ${value}, type: ${typeof value}, constructor: ${value?.constructor?.name}`)
 				}
@@ -322,62 +417,129 @@ export class DynamicFragment {
 		})
 
 		this.#attributeLocators?.forEach(locator => {
-			if (locator.type == 'attribute' || locator.type == 'booleanAttribute') {
-				const dataAttribute = `data-reactive-${locator.attribute}`
-				/** @type {Element|null} */
-				let element = null
-				if (selfElement?.getAttribute(dataAttribute) == locator.dataAttributeValue) {
-					element = selfElement
-				} else if (selfElement) {
-					element = selfElement.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
-				} else if (container) {
-					element = container.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
-				}
-
-				if (!element) {
-					throw new Error(`Could not connect attribute: ${locator.attribute}`)
-				}
-
-				element.removeAttribute(dataAttribute)
-				if (locator.type == 'attribute') {
-					this.#dynamicNodes[locator.index] = { type: 'attribute', prefix: locator.prefix, suffix: locator.suffix, attribute: locator.attribute, node: element }
-				} else {
-					this.#dynamicNodes[locator.index] = { type: 'attribute', attribute: locator.attribute, node: element }
-				}
-
-			} else if (locator.type == 'attributeExtension') {
+			if (locator.type == 'attributeExtension') {
 				this.#dynamicNodes[locator.index] = { type: 'attributeExtension', prefix: locator.prefix, suffix: locator.suffix, associatedIndex: locator.associatedIndex }
+				return
+			}
+
+			const element = locateElement(selfElement ?? container, locator)
+
+			if (!element) {
+				throw new Error(`Could not connect attribute of type: ${locator.type}`)
+			}
+
+			if (locator.type == 'ff-bind') {
+
+				if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement) {
+
+					/** @type {TwowayBinding<any>} */
+					const twoWayBinding = this.values[locator.index]
+
+					const boundValue = twoWayBinding.get()
+
+					switch (element.type) {
+						case 'checkbox':
+							if (typeof boundValue == 'boolean') {
+								element.checked = boundValue
+							} else if (boundValue instanceof Set) {
+								element.checked = boundValue.has(element.name)
+							} else if (boundValue instanceof Array) {
+								element.checked = boundValue.includes(element.name)
+							}
+							break
+						case 'radio':
+							element.checked = boundValue == element.value
+							break
+						case 'text':
+						case 'select-one':
+							element.value = boundValue
+					}
+
+
+					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
+				} else {
+					console.log('TODO: ff-bind handle other types of elements')
+				}
+				this.#dynamicNodes[locator.index] = { type: 'ff-bind', node: element }
+
+			} else if (locator.type == 'attribute') {
+				this.#dynamicNodes[locator.index] = { type: 'attribute', prefix: locator.prefix, suffix: locator.suffix, attribute: locator.attribute, node: element }
+			} else if (locator.type == 'booleanAttribute') {
+				this.#dynamicNodes[locator.index] = { type: 'attribute', attribute: locator.attribute, node: element }
 			} else {
 				this.#dynamicNodes[locator.index] = {
 					type: 'eventhandler',
 					handler: this.values[locator.index]
 				}
 
-				const dataAttribute = `data-${locator.event}-event-handler`
-
-				/** @type {Element|null} */
-				let element = null
-				if (selfElement?.getAttribute(dataAttribute) == locator.dataAttributeValue) {
-					element = selfElement
-				} else if (selfElement) {
-					element = selfElement.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
-				} else if (container) {
-					element = container.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
-				}
-				if (!element) {
-					throw new Error(`Could not connect event handler: ${locator.event}`)
-				}
 				element.addEventListener(locator.event, (event) => {
-					// @ts-ignore
-					const { handler } = this.#dynamicNodes[locator.index]
+					const handler = this.values[locator.index]
 					handler.call(eventHandlerContext || element, event)
 				})
-				element.removeAttribute(dataAttribute)
 			}
 		})
 
 		// this array is no longer needed
 		this.#attributeLocators = null
+	}
+
+	/**
+	 * @param {AttributeLocator} locator
+	 * @param {HTMLInputElement|HTMLSelectElement} element
+	 * @param {Event} event
+	 */
+	#handleNativeInputEvent(locator, element, event) {
+		/** @type {TwowayBinding<any>} */
+		const binding = this.values[locator.index]
+
+		switch (element.type) {
+			case 'checkbox':
+				const valueBefore = binding.get()
+				if (valueBefore instanceof Set) {
+					const newSet = new Set(valueBefore)
+					element.checked ?
+						newSet.add(element.name) :
+						newSet.delete(element.name)
+					return binding.set(newSet, event)
+				}
+				if (valueBefore instanceof Array) {
+					// TODO
+				}
+				binding.set(element.checked, event)
+				break
+			default:
+				binding.set(element.value, event)
+		}
+	}
+
+	/**
+	 * @param {AttributeLocator} locator
+	 * @param {HTMLInputElement|HTMLSelectElement} element
+	 */
+	#updateNativeInputElement(locator, element) {
+		// document.activeElement == element
+		/** @type {TwowayBinding<any>} */
+		const twoWayBinding = this.values[locator.index]
+
+		const boundValue = twoWayBinding.get()
+
+		switch (element.type) {
+			case 'checkbox':
+				if (typeof boundValue == 'boolean') {
+					element.checked = boundValue
+				} else if (boundValue instanceof Set) {
+					element.checked = boundValue.has(element.name)
+				} else if (boundValue instanceof Array) {
+					element.checked = boundValue.includes(element.name)
+				}
+				break
+			case 'radio':
+				element.checked = boundValue == element.value
+				break
+			case 'text':
+			case 'select-one':
+				element.value = boundValue
+		}
 	}
 
 	/**
@@ -519,7 +681,39 @@ export class DynamicFragment {
 
 		newValues.forEach((value, index) => {
 			const previousValue = oldValues[index]
+
 			if (value == previousValue) {
+				// two-way binding
+				if (typeof value?.get == 'function') {
+					/** @type {TwowayBinding<any>} */
+					const binding = value
+					const dynamicNode = this.#dynamicNodes[index]
+					if (dynamicNode.type != 'ff-bind') {
+						throw new Error('Can only use two way binding with ff-bind')
+					}
+					const newValue = binding.get()
+					if (dynamicNode.node instanceof HTMLInputElement || dynamicNode.node instanceof HTMLSelectElement) {
+						switch (dynamicNode.node.type) {
+							case 'checkbox':
+								if (typeof newValue == 'boolean') {
+									dynamicNode.node.checked = newValue
+								} else if (newValue instanceof Set) {
+									dynamicNode.node.checked = newValue.has(dynamicNode.node.name)
+								} else if (newValue instanceof Array) {
+									dynamicNode.node.checked = newValue.includes(dynamicNode.node.name)
+								}
+								break
+							case 'radio':
+								dynamicNode.node.checked = newValue == dynamicNode.node.value
+								break
+							case 'text':
+							case 'select-one':
+								dynamicNode.node.value = newValue
+						}
+					}
+
+
+				}
 				return
 			}
 
@@ -544,9 +738,6 @@ export class DynamicFragment {
 						this.#updateStringAttribute(index, newValues)
 						updatedAttributes.add(dynamicNode.associatedIndex)
 					}
-					break
-				case 'eventhandler':
-					dynamicNode.handler = value
 					break
 				case 'property':
 					/** @type {PropertySetter} */
