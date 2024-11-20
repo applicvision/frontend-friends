@@ -1,5 +1,5 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html, innerHTML } from '../src/dynamic-fragment.js'
+import { html, innerHTML, twoway } from '../src/dynamic-fragment.js'
 import expect from '@applicvision/js-toolbox/expect'
 import { addTestContainer, property } from './helpers.js'
 
@@ -146,12 +146,28 @@ describe('Dynamic fragments', () => {
 	it('event handler', () => {
 		let clicked = false
 		const clickHandler = () => clicked = true
-		const fragment = html`<button onclick=${clickHandler}>tryck</button>`
+		const fragment = html`<button onclick=${clickHandler}>tryck</button>${null}`
 		fragment.mount(testContainer)
 
 		testContainer.querySelector('button')?.click()
-
 		expect(clicked).to.be.true()
+
+		let anotherClicked = false
+		const clickHandler2 = () => anotherClicked = true
+
+		fragment.values = [clickHandler2]
+		testContainer.querySelector('button')?.click()
+		expect(anotherClicked).to.be.true()
+
+		anotherClicked = false
+		const clickHandler3 = () => anotherClicked = true
+
+		fragment.values = [() => { }, html`<button onclick=${clickHandler3}>nested</button>`]
+
+		testContainer.querySelectorAll('button')[1]?.click()
+
+		expect(anotherClicked).to.be.true()
+
 	})
 
 	it('event handler with set context', () => {
@@ -373,9 +389,26 @@ describe('Dynamic fragments', () => {
 		/** @type {HTMLDetailsElement} */
 		// @ts-ignore
 		const details = testContainer.firstElementChild
-		expect(details.open).to.be.true
+		expect(details.open).to.be.true()
 
 		fragment.values = [property('open', false)]
-		expect(details.open).to.be.false
+		expect(details.open).to.be.false()
+	})
+
+	it('Shared state', () => {
+		const state = { value: 'initial' }
+		const fragment = html`<input ff-share=${twoway(state, 'value')}>`
+		fragment.mount(testContainer)
+
+		const input = testContainer.querySelector('input')
+
+		expect(input?.value).to.equal('initial')
+
+		input?.setRangeText('new value', 0, 8)
+		input?.dispatchEvent(new Event('input'))
+
+		expect(input?.value).to.equal('new value')
+
+		expect(state.value).to.equal('new value')
 	})
 })

@@ -1,10 +1,16 @@
 import { DynamicFragment, html } from '@applicvision/frontend-friends/dynamic-fragment'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
-/** @import {StoreSubscriber} from './store.js' */
+/**
+ * @import {StoreSubscriber} from './store.js'
+ * @import {TwowayBinding} from './dynamic-fragment.js'
+ **/
 
 
-/** @implements {StoreSubscriber} */
+/**
+ * @template [SharedState=null]
+ * @implements {StoreSubscriber} 
+ **/
 export class DeclarativeElement extends HTMLElement {
 
 	constructor() {
@@ -38,6 +44,33 @@ export class DeclarativeElement extends HTMLElement {
 	#mounted = false
 	get isMounted() {
 		return this.#mounted
+	}
+
+	/** @type {TwowayBinding?} */
+	#twowayBinding = null
+	/**
+	 * @private
+	 * @param {TwowayBinding} binding
+	 */
+	set __twowayBinding(binding) {
+		this.#twowayBinding = binding
+		this.invalidate()
+	}
+
+	/**
+	 * @protected
+	 * @type {SharedState}
+	 */
+	get sharedState() {
+		return this.#twowayBinding?.get()
+	}
+
+	/**
+	 * @protected
+	 * @param {SharedState} newValue
+	 */
+	set sharedState(newValue) {
+		this.#twowayBinding?.set(newValue)
 	}
 
 	connectedCallback() {

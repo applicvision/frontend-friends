@@ -1,3 +1,5 @@
+import { DeclarativeElement } from '@applicvision/frontend-friends'
+
 const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
 
 const commentPrefix = 'dynamic-fragment'
@@ -9,16 +11,19 @@ const propertyCommentPrefix = `${commentPrefix}:property:_:`
 
 const attributePrefix = 'data-reactive'
 
+const sharedStateAttributeName = 'ff-share'
+
 /**
  * @typedef {{type: 'eventhandler', attribute: string, dataAttributeValue: string, index: number, event: string } |
  * {type: 'attributeExtension', index: number, associatedIndex: number, prefix: string, suffix: string, quotemark: '"'|"'"} |
  * {type: 'booleanAttribute', attribute: string, dataAttributeValue: string, index: number } |
- * {type: 'ff-bind', attribute: 'ff-bind', dataAttributeValue: string, index: number } |
+ * {type: 'sharedState', attribute: typeof sharedStateAttributeName, dataAttributeValue: string, index: number } |
  * {type: 'attribute', attribute: string, dataAttributeValue: string, quotemark: '"'|"'"|'', index: number, prefix: string, suffix: string}} AttributeLocator
 */
 
 /**
- * @typedef {{get: () => any, set: (newValue: any, event: Event) => void}} TwowayBinding
+ * @typedef {{get: () => any, set: (newValue: any, event?: Event) => void}} TwowayBinding
+ * @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|DeclarativeElement} TwowayBindableElement
  */
 
 /**
@@ -133,6 +138,39 @@ export function twoway(state, property) {
 	return new Twoway(state, property)
 }
 
+/**
+ * @param {TwowayBindableElement} element
+ * @param {TwowayBinding} sharedState
+ **/
+function updateElementWithSharedState(element, sharedState) {
+	// document.activeElement == element
+	if (element instanceof DeclarativeElement) {
+		// @ts-ignore
+		return element.__twowayBinding = sharedState
+	}
+	const newValue = sharedState.get()
+	if (element instanceof HTMLInputElement && element.type == 'checkbox') {
+
+		if (typeof newValue == 'boolean') {
+			element.checked = newValue
+		} else if (newValue instanceof Set) {
+			element.checked = newValue.has(element.name)
+		} else if (newValue instanceof Array) {
+			element.checked = newValue.includes(element.name)
+		}
+	} else if (element instanceof HTMLInputElement && element.type == 'radio') {
+		element.checked = newValue == element.value
+	} else if (element instanceof HTMLSelectElement && element.type == 'select-multiple') {
+		for (const option of element.options) {
+			/** @type {Array<string>} */
+			const selectedOptions = newValue
+			option.selected = selectedOptions.includes(option.value)
+		}
+	} else {
+		element.value = sharedState.get()
+	}
+}
+
 
 /**
  * @param {Element|DocumentFragment|ShadowRoot|null} referenceElement
@@ -161,7 +199,7 @@ export class DynamicFragment {
 	 * 	{type: 'content', start: Comment, end: Comment, currentFragment?: DynamicFragment} |
 	 * 	{type: 'array', start: Comment, end: Comment, current: DynamicFragment[]} |
 	 * 	{type: 'property', element: HTMLElement} |
-	 * 	{type: 'ff-bind', node: Element} |
+	 * 	{type: 'sharedState', node: TwowayBindableElement} |
 	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
 	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
 	 * 	{type: 'attributeExtension', prefix: string, suffix: string, associatedIndex: number} |
@@ -263,16 +301,16 @@ export class DynamicFragment {
 					}
 				}
 
-				if (attribute == 'ff-bind') {
+				if (attribute == sharedStateAttributeName) {
 					if (typeof value?.get != 'function' || typeof value?.set != 'function') {
-						throw new Error('ff-bind must use a two way binding (get and set function)')
+						throw new Error(`${sharedStateAttributeName} must use a two way binding (get and set function)`)
 					}
 					htmlResult += part.slice(0, -attributeMatch[0].length)
 
 					const dataAttributeValue = indexPathPrefix + index
 
 					htmlResult += `${attributePrefix}-${attribute}=${quotemark ?? ''}${dataAttributeValue}`
-					attributeLocators[index] = { type: 'ff-bind', attribute, index, dataAttributeValue }
+					attributeLocators[index] = { type: 'sharedState', attribute, index, dataAttributeValue }
 					return
 				}
 
@@ -367,7 +405,7 @@ export class DynamicFragment {
 	 * @param {{start?: Comment, end?: Comment, currentFragment?: DynamicFragment}} data
 	 */
 	_registerDynamicContent(index, data) {
-		// @ts-ignore we need to built up this object piece by piece
+		// @ts-ignore we need to build this object piece by piece
 		const node = this.#dynamicNodes[index] ??= { type: 'content' }
 		Object.assign(node, data)
 	}
@@ -378,7 +416,7 @@ export class DynamicFragment {
 	 * @param {{start?: Comment, end?: Comment, current?: DynamicFragment}} data
 	 */
 	_registerDynamicArrayContent(index, data) {
-		// @ts-ignore we need to built up this object piece by piece
+		// @ts-ignore we need to build this object piece by piece
 		const node = this.#dynamicNodes[index] ??= { type: 'array' }
 		Object.assign(node, data)
 	}
@@ -433,22 +471,24 @@ export class DynamicFragment {
 				throw new Error(`Could not connect attribute of type: ${locator.type}`)
 			}
 
-			if (locator.type == 'ff-bind') {
+			if (locator.type == 'sharedState') {
 				/** @type {TwowayBinding} */
 				const binding = this.values[locator.index]
 
-				if (
-					element instanceof HTMLInputElement ||
+				if (!(element instanceof HTMLInputElement ||
 					element instanceof HTMLSelectElement ||
-					element instanceof HTMLTextAreaElement
-				) {
-					this.#updateNativeInputElement(binding.get(), element)
-
-					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
-				} else {
-					console.log('TODO: ff-bind handle other types of elements')
+					element instanceof HTMLTextAreaElement ||
+					element instanceof DeclarativeElement)) {
+					throw new Error(`Can only use ${sharedStateAttributeName} with input, select, text-area, or custom element`)
 				}
-				this.#dynamicNodes[locator.index] = { type: 'ff-bind', node: element }
+
+				if (!(element instanceof DeclarativeElement)) {
+					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
+				}
+
+				updateElementWithSharedState(element, binding)
+
+				this.#dynamicNodes[locator.index] = { type: 'sharedState', node: element }
 
 			} else if (locator.type == 'attribute') {
 				this.#dynamicNodes[locator.index] = { type: 'attribute', prefix: locator.prefix, suffix: locator.suffix, attribute: locator.attribute, node: element }
@@ -505,35 +545,6 @@ export class DynamicFragment {
 			binding.set(selected, event)
 		} else {
 			binding.set(element.value, event)
-		}
-	}
-
-	/**
-	 * @param {any} newValue
-	 * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
-	 */
-	#updateNativeInputElement(newValue, element) {
-		// document.activeElement == element
-
-		switch (element.type) {
-			case 'checkbox':
-				if (!(element instanceof HTMLInputElement)) break
-				if (typeof newValue == 'boolean') {
-					element.checked = newValue
-				} else if (newValue instanceof Set) {
-					element.checked = newValue.has(element.name)
-				} else if (newValue instanceof Array) {
-					element.checked = newValue.includes(element.name)
-				}
-				break
-			case 'radio':
-				if (!(element instanceof HTMLInputElement)) break
-				element.checked = newValue == element.value
-				break
-			case 'text':
-			case 'textarea':
-			case 'select-one':
-				element.value = newValue
 		}
 	}
 
@@ -689,16 +700,8 @@ export class DynamicFragment {
 			const dynamicNode = this.#dynamicNodes[index]
 
 			switch (dynamicNode.type) {
-				case 'ff-bind':
-					/** @type {TwowayBinding} */
-					const binding = value
-					if (
-						dynamicNode.node instanceof HTMLInputElement ||
-						dynamicNode.node instanceof HTMLSelectElement ||
-						dynamicNode.node instanceof HTMLTextAreaElement
-					) {
-						this.#updateNativeInputElement(binding.get(), dynamicNode.node)
-					}
+				case 'sharedState':
+					updateElementWithSharedState(dynamicNode.node, value)
 					break
 				case 'attribute':
 					if (typeof value == 'boolean') {
