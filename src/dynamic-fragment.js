@@ -145,8 +145,7 @@ export function twoway(state, property) {
 function updateElementWithSharedState(element, sharedState) {
 	// document.activeElement == element
 	if (element instanceof DeclarativeElement) {
-		// @ts-ignore
-		return element.__twowayBinding = sharedState
+		return element.sharedStateBinding = sharedState
 	}
 	const newValue = sharedState.get()
 	if (element instanceof HTMLInputElement && element.type == 'checkbox') {
@@ -240,11 +239,30 @@ export class DynamicFragment {
 
 		let htmlResult = ''
 
+		let insideComment = false
+
 		/** @type {AttributeLocator[]} */
 		const attributeLocators = []
 
 		values.forEach((value, index) => {
-			const part = strings[index]
+			let part = strings[index]
+
+			if (part.includes('<!--') && !part.includes('-->')) {
+				htmlResult += part
+				insideComment = true
+				return
+			}
+			if (insideComment && part.includes('-->')) {
+				const endOfComment = part.indexOf('-->') + 3
+				htmlResult += part.slice(0, endOfComment)
+				part = part.slice(endOfComment)
+				insideComment = false
+			}
+
+			if (insideComment) {
+				htmlResult += part
+				return
+			}
 
 
 			if (value instanceof Array) {
@@ -699,7 +717,7 @@ export class DynamicFragment {
 
 			const dynamicNode = this.#dynamicNodes[index]
 
-			switch (dynamicNode.type) {
+			switch (dynamicNode?.type) {
 				case 'sharedState':
 					updateElementWithSharedState(dynamicNode.node, value)
 					break

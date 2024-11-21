@@ -49,10 +49,9 @@ export class DeclarativeElement extends HTMLElement {
 	/** @type {TwowayBinding?} */
 	#twowayBinding = null
 	/**
-	 * @private
 	 * @param {TwowayBinding} binding
 	 */
-	set __twowayBinding(binding) {
+	set sharedStateBinding(binding) {
 		this.#twowayBinding = binding
 		this.invalidate()
 	}
