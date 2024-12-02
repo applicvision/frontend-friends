@@ -20,6 +20,12 @@ export class DeclarativeElement extends HTMLElement {
 		// @ts-ignore
 		const componentClass = this.constructor
 		shadowRoot.adoptedStyleSheets = componentClass.stylesheets
+
+		if (this._provisionalStateBinding) {
+			this.#twowayBinding = this._provisionalStateBinding
+			this._provisionalStateBinding = null
+			this.#lastSharedState = this.sharedState
+		}
 	}
 
 	/** @type {StyleDeclaration|StyleDeclaration[]} */
@@ -52,16 +58,31 @@ export class DeclarativeElement extends HTMLElement {
 	 * @param {TwowayBinding} binding
 	 */
 	set sharedStateBinding(binding) {
+		const firstBinding = !this.#twowayBinding
 		this.#twowayBinding = binding
+
+		if (firstBinding || this.sharedState != this.#lastSharedState) {
+			this.#lastSharedState = this.sharedState
+			this.sharedStateChanged()
+		}
+	}
+
+	/** @protected */
+	sharedStateChanged() {
 		this.invalidate()
 	}
+
+	/**
+	 * @type {SharedState?}
+	 */
+	#lastSharedState = null
 
 	/**
 	 * @protected
 	 * @type {SharedState}
 	 */
 	get sharedState() {
-		return this.#twowayBinding?.get()
+		return this.#twowayBinding?.get() ?? null
 	}
 
 	/**
@@ -94,16 +115,17 @@ export class DeclarativeElement extends HTMLElement {
 	/**
 	 * @template {Object<string, any>} T
 	 * @param {T} object
+	 * @param {(keypath: (string|symbol)[]) => void} effect
 	 * @returns {T}
 	 */
-	reactive(object) {
-		return deepWatch(object, () => this.invalidate())
+	reactive(object, effect = () => this.invalidate()) {
+		return deepWatch(object, effect)
 	}
 
 	/** @type {Promise<any>|null} */
 	pendingUpdate = null
 	invalidate() {
-		this.pendingUpdate ??= Promise.resolve().then(() => {
+		return this.pendingUpdate ??= Promise.resolve().then(() => {
 			this.#internalRender()
 			this.pendingUpdate = null
 			this.componentDidUpdate()
