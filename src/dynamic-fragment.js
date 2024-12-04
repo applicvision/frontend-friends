@@ -21,7 +21,8 @@ const sharedStateAttributeName = 'ff-share'
 
 /**
  * @typedef {{get: () => any, set: (newValue: any, event?: Event) => void}} TwowayBinding
- * @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|Element & {sharedStateBinding: any}} TwowayBindableElement
+ * @typedef {Element & {sharedStateBinding: TwowayBinding}} CustomTwowayBindable
+ * @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|CustomTwowayBindable} TwowayBindableElement
  */
 
 /**
@@ -54,9 +55,7 @@ export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
 }
 
-/**
- * @param {Element} element
- */
+/** @type {(element: Element) => element is CustomTwowayBindable} */
 function elementIsTwoWayBindable(element) {
 	while ((element = Object.getPrototypeOf(element)) && element != HTMLElement.prototype) {
 		if (Object.getOwnPropertyDescriptor(element, 'sharedStateBinding')) {
@@ -66,21 +65,12 @@ function elementIsTwoWayBindable(element) {
 	return false
 }
 
-// /** @type {Map<Element, TwowayBinding>} */
-// const provisionalSharedStateMap = new Map()
-
-// /**
-//  * @param {Element} element
-//  */
-// export function getProvisionalStateBinding(element) {
-// 	const entry = provisionalSharedStateMap.get(element)
-// 	console.log('mappen', provisionalSharedStateMap)
-// 	if (entry) {
-// 		provisionalSharedStateMap.delete(element)
-// 		return entry
-// 	}
-// 	return null
-// }
+/** @param {Element} element */
+function elementIsNativeControlElement(element) {
+	return element instanceof HTMLInputElement ||
+		element instanceof HTMLSelectElement ||
+		element instanceof HTMLTextAreaElement
+}
 
 class InnerHTML {
 
@@ -118,11 +108,6 @@ export class PropertySetter {
 		this.value = value
 	}
 }
-
-
-/** @type {Map<object, Map<string|number|symbol, TwowayBinding>>} */
-// cache?
-// const twowayBindingCache = new Map()
 
 /** 
  * @template {{[key: string]: any}} T 
@@ -222,8 +207,7 @@ export class DynamicFragment {
 	 * 	{type: 'array', start: Comment, end: Comment, current: DynamicFragment[]} |
 	 * 	{type: 'property', element: HTMLElement} |
 	 * 	{type: 'sharedState', node: TwowayBindableElement} |
-	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
-	 * 	{type: 'eventhandler', handler: (event: Event) => void} |
+	 * 	{type: 'eventhandler'} |
 	 * 	{type: 'attributeExtension', prefix: string, suffix: string, associatedIndex: number} |
 	 * 	{type: 'attribute', attribute: string, prefix?: string, suffix?: string, node: Element})[]}
 	 **/
@@ -517,19 +501,15 @@ export class DynamicFragment {
 				/** @type {TwowayBinding} */
 				const binding = this.values[locator.index]
 
-				const isNativeElement = element instanceof HTMLInputElement ||
-					element instanceof HTMLSelectElement ||
-					element instanceof HTMLTextAreaElement
-
-				if (isNativeElement) {
+				if (elementIsNativeControlElement(element)) {
 					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
 					updateElementWithSharedState(element, binding)
 				} else if (elementIsTwoWayBindable(element)) {
 					element.sharedStateBinding = binding
 				} else if (customElements.get(element.localName)) {
-					// @ts-ignore
+					// @ts-ignore since custom elements are not always connected here, we add a provisional property
+					// and then the constructor can consume that
 					element._provisionalStateBinding = binding
-					console.log('sparade provisorisk bindning')
 				} else {
 					throw new Error('Can not connect shared state')
 				}
@@ -543,13 +523,12 @@ export class DynamicFragment {
 				this.#dynamicNodes[locator.index] = { type: 'attribute', attribute: locator.attribute, node: element }
 			} else {
 				this.#dynamicNodes[locator.index] = {
-					type: 'eventhandler',
-					handler: this.values[locator.index]
+					type: 'eventhandler'
 				}
 
 				element.addEventListener(locator.event, (event) => {
 					const handler = this.values[locator.index]
-					handler.call(eventHandlerContext || element, event)
+					handler?.call(eventHandlerContext || element, event)
 				})
 			}
 		})
@@ -748,11 +727,7 @@ export class DynamicFragment {
 
 			switch (dynamicNode?.type) {
 				case 'sharedState':
-					const isNativeElement = dynamicNode.node instanceof HTMLInputElement ||
-						dynamicNode.node instanceof HTMLSelectElement ||
-						dynamicNode.node instanceof HTMLTextAreaElement
-
-					if (isNativeElement) {
+					if (elementIsNativeControlElement(dynamicNode.node)) {
 						updateElementWithSharedState(dynamicNode.node, value)
 					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
 						dynamicNode.node.sharedStateBinding = value
