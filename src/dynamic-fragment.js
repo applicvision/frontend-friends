@@ -775,12 +775,12 @@ export class DynamicFragment {
 						if (dynamicNode.currentFragment) {
 							// store previous nested
 							dynamicNode.currentFragment.saveFragment(range.extractContents())
-							this.#fragmentCache.set(dynamicNode.currentFragment.strings, dynamicNode.currentFragment)
+							this.#cacheFragment(dynamicNode.currentFragment)
 						} else {
 							range.deleteContents()
 						}
 
-						const reusableFragment = this.#fragmentCache.get(value.strings)
+						const reusableFragment = this.#getCached(value)
 						if (reusableFragment) {
 							reusableFragment.restoreIn(range)
 							// restore previous, and update its values
@@ -797,7 +797,7 @@ export class DynamicFragment {
 						if (dynamicNode.currentFragment) {
 							// store previous nested
 							dynamicNode.currentFragment.saveFragment(range.extractContents())
-							this.#fragmentCache.set(dynamicNode.currentFragment.strings, dynamicNode.currentFragment)
+							this.#cacheFragment(dynamicNode.currentFragment)
 						} else {
 							range.deleteContents()
 						}
@@ -820,26 +820,45 @@ export class DynamicFragment {
 					const previousArray = previousValue
 
 					// compare length
+
+
+					// Remove and cache fragments
 					if (previousArray.length > nextArray.length) {
-						let removedElements = 0
 
-						while (removedElements < previousArray.length - nextArray.length) {
+						for (let index = previousArray.length - 1; index >= nextArray.length; index -= 1) {
+							const activeFragment = activeFragments[index]
 
-							dynamicNode.end.previousElementSibling?.remove()
-							removedElements++
+							const elementToCache = dynamicNode.end.previousElementSibling
+							if (elementToCache) {
+								elementToCache.remove()
+								activeFragment.saveFragment(elementToCache)
+								this.#cacheFragment(activeFragment)
+							}
 						}
+
+						// Insert new
 					} else if (previousArray.length < nextArray.length) {
 
 						const fragmentToInsert = document.createDocumentFragment()
 						for (let index = previousArray.length; index < nextArray.length; index += 1) {
 							const newFragment = nextArray[index]
+							const cachedFragment = this.#getCached(newFragment)
+							if (cachedFragment) {
+								if (!cachedFragment.#fragment) throw new Error('no fragment found')
+								fragmentToInsert.append(cachedFragment.#fragment)
+								activeFragments[index] = cachedFragment
+								// and update its values, to update its contents
+								cachedFragment.values = newFragment.values
+							} else {
+								fragmentToInsert.append(newFragment.buildFragment(this.#eventHandlerContext))
+								activeFragments[index] = newFragment
+							}
 
-							fragmentToInsert.append(newFragment.buildFragment(this.#eventHandlerContext))
-							dynamicNode.current[index] = newFragment
 						}
 						dynamicNode.end.parentNode?.insertBefore(fragmentToInsert, dynamicNode.end)
 					}
 
+					// Update the ones not touched by insertion/removal
 					let currentNode = dynamicNode.start.nextSibling
 					for (let index = 0; index < Math.min(previousArray.length, nextArray.length); index += 1) {
 						const activeFragment = activeFragments[index]
@@ -859,9 +878,9 @@ export class DynamicFragment {
 							const nodeToCache = currentNode.parentElement.removeChild(currentNode)
 
 							activeFragment.saveFragment(nodeToCache)
-							this.#fragmentCache.set(activeFragment.strings, activeFragment)
+							this.#cacheFragment(activeFragment)
 
-							const cachedFragment = this.#fragmentCache.get(next.strings)
+							const cachedFragment = this.#getCached(next)
 							if (cachedFragment) {
 								if (!cachedFragment.#fragment) throw new Error('No associated fragment found. Was saveFragment called?')
 
@@ -870,9 +889,6 @@ export class DynamicFragment {
 								activeFragments[index] = cachedFragment
 								// and update its values, to update its contents
 								cachedFragment.values = next.values
-
-								// remove it from the cache
-								this.#fragmentCache.delete(activeFragment.strings)
 							} else {
 								const fragment = next.buildFragment(this.#eventHandlerContext)
 								nextNode.before(fragment)
@@ -910,8 +926,23 @@ export class DynamicFragment {
 		}
 	}
 
-	/** @type {Map<TemplateStringsArray, DynamicFragment>} */
+	/** @type {Map<TemplateStringsArray, DynamicFragment[]>} */
 	#fragmentCache = new Map()
+
+	/** @param {DynamicFragment} fragment */
+	#getCached(fragment) {
+		return this.#fragmentCache.get(fragment.strings)?.pop()
+	}
+
+	/** @param {DynamicFragment} fragment */
+	#cacheFragment(fragment) {
+		let cacheArray = this.#fragmentCache.get(fragment.strings)
+		if (!cacheArray) {
+			cacheArray = []
+			this.#fragmentCache.set(fragment.strings, cacheArray)
+		}
+		cacheArray.push(fragment)
+	}
 
 	get values() {
 		return this.#values
