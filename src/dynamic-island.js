@@ -44,9 +44,9 @@ export class DynamicIsland extends EventTarget {
 	pendingUpdate = null
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
-			console.time('render')
+			// console.time('render')
 			this.#internalRender()
-			console.timeEnd('render')
+			// console.timeEnd('render')
 			this.pendingUpdate = null
 			// TODO: maybe signal update
 		})
@@ -141,9 +141,6 @@ export class DynamicIsland extends EventTarget {
 	#cacheIsland() {
 		if (!(this.container && this.#currentFragment)) return
 
-		const range = document.createRange()
-		range.selectNodeContents(this.container)
-		this.#currentFragment.saveFragment(range.extractContents())
 		this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 	}
 

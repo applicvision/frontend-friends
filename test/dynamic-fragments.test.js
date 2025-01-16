@@ -321,7 +321,45 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
 		expect(testContainer.querySelector('li')).to.equal(fisrtLi)
+	})
 
+	it('list of items with multiple elements', () => {
+		const list = [{ term: 'term1', def: 'def1' }, { term: 'term2', def: 'def2' }]
+
+		const getEntries = () => list.map(({ term, def }) => html`<dt>${term}</dt><dd>${def}</dd>`)
+
+		const fragment = html`<dl>
+			${getEntries()}
+		</dl>`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.innerText).to.equal('term1\ndef1\nterm2\ndef2')
+
+		list.pop()
+
+		fragment.values = [getEntries()]
+
+		expect(testContainer.innerText).to.equal('term1\ndef1')
+
+	})
+
+	it('switch between array and content', () => {
+		const getList = () => [1, 2, 3].map(item => html`<div>${item}</div>`)
+
+		const fragment = html`${html`<div>loading</div>`}`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('loading')
+
+		fragment.values = [getList()]
+
+		expect(testContainer.textContent).to.equal('123')
+
+		fragment.values = [html`<div>loading again</div>`]
+
+		expect(testContainer.textContent).to.equal('loading again')
 	})
 
 	it('only text', () => {

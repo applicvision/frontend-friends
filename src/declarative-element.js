@@ -159,9 +159,6 @@ export class DeclarativeElement extends HTMLElement {
 		} else {
 
 			// cache the previous dynamic fragment
-			const range = document.createRange()
-			range.selectNodeContents(this.shadowRoot)
-			this.#currentFragment.saveFragment(range.extractContents())
 			this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 
 			// either restore from cache or mount new fragment
