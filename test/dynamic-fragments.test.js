@@ -342,6 +342,44 @@ describe('Dynamic fragments', () => {
 
 		expect(testContainer.innerText).to.equal('term1\ndef1')
 
+		list.push({ term: 'new term', def: 'new def' })
+
+		fragment.values = [getEntries()]
+
+		expect(testContainer.innerText).to.equal('term1\ndef1\nnew term\nnew def')
+	})
+
+	it('list with keyed items', () => {
+		const list = [
+			{ id: '123', name: 'test 1' },
+			{ id: '456', name: 'test 2' },
+			{ id: '789', name: 'test 3' },
+		]
+
+		const getEntries = () => list.map(({ id, name }) => html`<li>${name}</li>`.key(id))
+
+		const fragment = html`<ul>${getEntries()}</ul>`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.innerText).to.equal('test 1\ntest 2\ntest 3')
+
+		list.splice(1, 0, { id: 'new', name: 'inserted' })
+
+		fragment.values = [getEntries()]
+
+		console.log(testContainer.innerHTML)
+		expect(testContainer.innerText).to.equal('test 1\ninserted\ntest 2\ntest 3')
+
+		const first = list.shift()
+		if (first) {
+			first.name = 'update test 1'
+			list.splice(1, 0, first)
+		}
+
+		console.log('third test')
+		fragment.values = [getEntries()]
+		expect(testContainer.innerText).to.equal('inserted\nupdate test 1\ntest 2\ntest 3')
 	})
 
 	it('switch between array and content', () => {

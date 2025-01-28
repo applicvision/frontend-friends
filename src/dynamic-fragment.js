@@ -711,9 +711,7 @@ export class DynamicFragment {
 		}
 	}
 
-	/**
-	 * @param {DynamicFragment} fragment
-	 */
+	/** @param {DynamicFragment} fragment */
 	#replaceWith(fragment) {
 		if (!this.#nodes) throw new Error('Can not replace something that is not mounted')
 
@@ -732,6 +730,31 @@ export class DynamicFragment {
 				parent.removeChild(node)
 			}
 		})
+	}
+
+	/** @param {DynamicFragment} fragment */
+	#before(fragment) {
+		if (!this.#nodes) throw new Error('Can not add something before an unmounted fragment')
+		if (!fragment.#nodes) throw new Error('Can not before something thas has no nodes')
+
+		const firstNode = this.#nodes[0]
+		const parent = firstNode?.parentElement
+		for (const node of fragment.#nodes) {
+			parent?.insertBefore(node, firstNode)
+		}
+	}
+
+	/** @param {DynamicFragment} fragment */
+	#after(fragment) {
+		if (!this.#nodes) throw new Error('Can not add something after an unmounted fragment')
+		if (!fragment.#nodes) throw new Error('Can not add something that has no nodes')
+
+		const lastNode = this.#nodes.at(-1)
+		if (lastNode instanceof CharacterData || lastNode instanceof HTMLElement) {
+			lastNode.after(...fragment.#nodes)
+		} else {
+			throw new Error(`Unexpected node type: ${lastNode}`)
+		}
 	}
 
 	/**
@@ -884,8 +907,8 @@ export class DynamicFragment {
 
 					if (nextArray.length && previousArray.length &&
 						previousArray.every(fragment => fragment.#key) &&
-						nextArray.every(fragment => fragment.#key) && false) {
-						console.log('TODO: do keyed update')
+						nextArray.every(fragment => fragment.#key)) {
+						this.#keyedListUpdate(previousArray, nextArray, dynamicNode)
 					} else {
 						this.#simpleListUpdate(previousArray, nextArray, dynamicNode)
 					}
@@ -1002,6 +1025,171 @@ export class DynamicFragment {
 
 			}
 		}
+	}
+
+	/**
+	 * @param {DynamicFragment[]} previousArray
+	 * @param {DynamicFragment[]} nextArray
+	 * @param {Extract<DynamicNode, {type: 'array'}>} dynamicNode
+	 */
+	#keyedListUpdate(previousArray, nextArray, dynamicNode) {
+		let keysState = previousArray.map(fragment => fragment.#key)
+		const nextKeys = nextArray.map(fragment => fragment.#key)
+
+
+		let state = dynamicNode.current
+
+		/** @type {Set<number>} */
+		const usedItemIndices = new Set()
+
+		/** @type {DynamicFragment?} */
+		let currentFragment = null
+
+
+		const mappedNext = nextArray.map((nextFragment, index) => {
+
+			const previousIndex = dynamicNode.current.findIndex(currentFragment =>
+				currentFragment.#key == nextFragment.#key &&
+				currentFragment.strings == nextFragment.strings
+			)
+
+			/** @type {DynamicFragment} */
+			let fragmentToAppend
+
+			if (previousIndex != -1) {
+				const previousFragment = dynamicNode.current[previousIndex]
+				previousFragment.values = nextFragment.values
+				usedItemIndices.add(previousIndex)
+				if (index == previousIndex) {
+					console.log('Item did not move in update, just move values')
+					currentFragment = previousFragment
+					return previousFragment
+				}
+				console.log('Reusable ietm found in array, but needs moving')
+				fragmentToAppend = previousFragment
+
+			} else {
+				console.log('key', nextFragment.#key, 'not present in prev')
+				const cachedFragment = this.#getCached(nextFragment)
+
+				if (cachedFragment && nextFragment.#key) {
+					console.log('restore from cache, move key and values')
+					cachedFragment.key(nextFragment.#key)
+					cachedFragment.values = nextFragment.values
+					fragmentToAppend = cachedFragment
+				} else {
+					console.log('building new, most expensive')
+					nextFragment.#buildFragment(this.#eventHandlerContext)
+					fragmentToAppend = nextFragment
+				}
+			}
+
+			if (currentFragment) {
+				console.log('adding', fragmentToAppend.#key, 'after', currentFragment.#key)
+				currentFragment.#after(fragmentToAppend)
+			} else {
+				console.log('No current fragment. Adding first item')
+				dynamicNode.start.after(...fragmentToAppend.#nodes ?? [])
+			}
+			currentFragment = fragmentToAppend
+			return fragmentToAppend
+		})
+
+		dynamicNode.current.forEach((fragment, index) => {
+			if (!usedItemIndices.has(index)) {
+				console.log('removing one')
+				fragment.#unmount()
+				this.#cacheFragment(fragment)
+			}
+		})
+
+		// TODO: remove the current property, and use prev value
+		dynamicNode.current = mappedNext
+
+		return
+
+		// console.log('update', keysState, nextKeys, state)
+
+		console.log('before delete', state.map(fra => fra.#key))
+
+		// Remove and cache the ones no longer present
+		keysState = keysState.filter((key, index) => {
+			if (!nextKeys.includes(key)) {
+				console.log('an item was removed', key, index)
+				// const fragmentToRemove = state[index]
+
+				//TODO: Den här raden är fel!
+				state.splice(index, 1)
+				// previousKeys.splice(index, 1)
+				fragmentToRemove.#unmount()
+				this.#cacheFragment(fragmentToRemove)
+				return false
+			}
+			return true
+		})
+		// state = state.filter(Boolean)
+		console.log('before insert', state.map(fra => fra.#key))
+
+		// Insert new ones
+		nextKeys.forEach((key, index) => {
+			if (!keysState.includes(key)) {
+				console.log('a new key in the list')
+				keysState.splice(index, 0, key)
+
+				const newFragment = nextArray[index]
+				const cachedFragment = this.#getCached(newFragment)
+				/** @type {DynamicFragment} */
+				let fragmentToInsert
+				if (cachedFragment) {
+					if (!cachedFragment.#nodes) {
+						console.log('crashen', cachedFragment)
+						throw new Error('no nodes found??')
+					}
+					// fragmentToInsert.append(...cachedFragment.#nodes)
+					// dynamicNode.current.push(cachedFragment)
+					// and update its values, to update its contents
+					state.splice(index, 0, cachedFragment)
+					// state[index + 1].#before(cachedFragment.#nodes)
+					fragmentToInsert = cachedFragment
+					cachedFragment.values = newFragment.values
+				} else {
+					newFragment.#buildFragment(this.#eventHandlerContext)
+					// fragmentToInsert.append()
+					// dynamicNode.current.push(newFragment)
+					state.splice(index, 0, newFragment)
+					fragmentToInsert = newFragment
+				}
+				const nextItem = state[index + 1]
+				if (nextItem) {
+					nextItem.#before(fragmentToInsert)
+				} else {
+					for (const node of fragmentToInsert.#nodes ?? []) {
+						dynamicNode.end.parentNode?.insertBefore(node, dynamicNode.end)
+					}
+				}
+				// state[index + 1].#before(fragmentToInsert)
+			}
+		})
+
+		console.log('before moving', dynamicNode.current.map(fra => fra.#key))
+
+		for (let index = 0; index < nextKeys.length; index++) {
+			const key = nextKeys[index]
+			const previousIndex = keysState.indexOf(key)
+			if (index != previousIndex) {
+				console.log('moving ', state[previousIndex].#nodes, 'to before', state[index])
+
+				keysState.splice(index, 0, ...keysState.splice(previousIndex, 1))
+
+				state[previousIndex].values = nextArray[index].values
+				state[index].#before(state[previousIndex])
+				state.splice(index, 0, ...state.splice(previousIndex, 1))
+
+			} else {
+				state[index].values = nextArray[index].values
+			}
+		}
+		console.log('after moving', dynamicNode.current.map(fra => fra.#key))
 	}
 
 	/** @type {string?} */
