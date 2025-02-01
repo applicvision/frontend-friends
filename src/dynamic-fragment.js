@@ -2,7 +2,7 @@ const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
-const arrayContentCommentPrefix = `${commentPrefix}:array:`
+const arrayContentCommentPrefix = `${commentPrefix}:array-content:`
 const arrayItemSeparatorCommentPrefix = `${commentPrefix}:array-item:`
 const propertyCommentPrefix = `${commentPrefix}:property:`
 
@@ -26,8 +26,7 @@ const sharedStateAttributeName = 'ff-share'
 
 /**
  * @typedef {(
- *	{type: 'content', start: Comment, end: Comment, current?: DynamicFragment} |
- * 	{type: 'array', start: Comment, end: Comment, current: DynamicFragment[]} |
+ *	{type: 'content', start: Comment, end: Comment, current?: DynamicFragment | DynamicFragment[]} |
  * 	{type: 'property', element: HTMLElement} |
  * 	{type: 'sharedState', node: TwowayBindableElement} |
  * 	{type: 'eventhandler'} |
@@ -97,8 +96,7 @@ function nodesInItem(itemStart) {
 	while (next = next.nextSibling) {
 
 		if (next instanceof Comment &&
-			(next.textContent?.trim().startsWith(arrayContentCommentPrefix) ||
-				next.textContent?.trim().startsWith(arrayItemSeparatorCommentPrefix) ||
+			(next.textContent?.trim().startsWith(arrayItemSeparatorCommentPrefix) ||
 				next.textContent?.trim().startsWith(contentCommentPrefix)
 			)
 
@@ -423,10 +421,12 @@ export class DynamicFragment {
 			// Treat as dynamic content
 			htmlResult += part
 
+			const isArray = value instanceof Array
 
-			// TODO: merge array and dynamic content
-			if (value instanceof Array) {
-				htmlResult += `<!-- ${arrayContentCommentPrefix}${indexPathPrefix}${index} -->`
+			// insert a comment to track position to enter content
+			htmlResult += `<!-- ${isArray ? arrayContentCommentPrefix : contentCommentPrefix}${indexPathPrefix}${index} -->`
+
+			if (isArray) {
 				value.forEach((dynamicFragment, arrayIndex) => {
 					if (dynamicFragment instanceof DynamicFragment) {
 						htmlResult += dynamicFragment.getHtmlString(indexPathPrefix + index + '-' + arrayIndex + '-')
@@ -437,19 +437,14 @@ export class DynamicFragment {
 						throw new Error('Array item must be declared with html')
 					}
 				})
-				htmlResult += `<!-- ${arrayContentCommentPrefix}${indexPathPrefix}${index} -->`
-				return
-			}
-
-			// insert a comment to track position to enter content
-			htmlResult += `<!-- ${contentCommentPrefix}${indexPathPrefix}${index} -->`
-			if (value instanceof DynamicFragment) {
+			} else if (value instanceof DynamicFragment) {
 				htmlResult += value.getHtmlString(indexPathPrefix + index + '-')
 			} else if (value instanceof InnerHTML) {
 				htmlResult += value.htmlString
 			} else if (value || value === 0) {
-
 				htmlResult += escapeHtml(value.toString())
+			} else {
+				// falsy content (except 0), does not render anything
 			}
 			htmlResult += `<!-- ${contentCommentPrefix}${indexPathPrefix}${index} -->`
 
@@ -471,21 +466,25 @@ export class DynamicFragment {
 
 		// first traverse children
 		this.#dynamicNodes.forEach((node) => {
-			if (node.type == 'array') {
-				/** @type {Element} */
-				// @ts-ignore (There should be an element for every item in the array)
-				let currentElement = node.start.nextElementSibling
-				for (const arrayNode of node.current) {
-
-					arrayNode.#connectAttributes(null, currentElement, eventHandlerContext)
+			if (node.type == 'content') {
+				if (node.current instanceof Array) {
+					// FIX: The iteration assumption one element per item is no longer correct
+					/** @type {Element} */
 					// @ts-ignore (There should be an element for every item in the array)
-					currentElement = currentElement.nextElementSibling
+					let currentElement = node.start.nextElementSibling
+					for (const arrayNode of node.current) {
+
+						arrayNode.#connectAttributes(null, currentElement, eventHandlerContext)
+						// @ts-ignore (There should be an element for every item in the array)
+						currentElement = currentElement.nextElementSibling
+					}
+
+				} else if (node.current) {
+					/** @type {Element|ShadowRoot|DocumentFragment} */
+					// @ts-ignore
+					const parent = node.start.parentNode
+					node.current.#connectAttributes(parent, null, eventHandlerContext)
 				}
-			} else if (node.type == 'content' && node.current) {
-				/** @type {Element|ShadowRoot|DocumentFragment} */
-				// @ts-ignore
-				const parent = node.start.parentNode
-				node.current.#connectAttributes(parent, null, eventHandlerContext)
 			}
 		})
 
@@ -634,18 +633,19 @@ export class DynamicFragment {
 					console.warn('Unknown property', propertySetter.key, ' for element', element)
 				}
 			}
-			else if (type == 'array') {
+			else if (type == 'array-content') {
 
-				/** @type {Extract<DynamicNode, {type: 'array'}> | undefined} */
+				/** @type {Extract<DynamicNode, {type: 'content'}> | undefined} */
 				// @ts-ignore
 				const node = dynamicFragment.#dynamicNodes[dynamicNodeIndex]
 				if (!node) {
 
 					dynamicFragment.#dynamicNodes[dynamicNodeIndex] = {
-						type: 'array',
+						type: 'content',
 						start: currentNode,
 						// This is not really the end, but set it for now (prevents ts-warning)
 						end: currentNode,
+						// TODO: drop the current value property
 						current: currentValue
 					}
 					if (currentValue.length > 0) {
@@ -656,10 +656,14 @@ export class DynamicFragment {
 				}
 			} else if (type == 'array-item') {
 				const index = Number(arrayIndex)
-				/** @type {Extract<DynamicNode, {type: 'array'}>} */
+				/** @type {Extract<DynamicNode, {type: 'content'}>} */
 				// @ts-ignore
 				const node = dynamicFragment.#dynamicNodes[dynamicNodeIndex]
-				node.current[index].#nodes = nodesInItem(currentNode)
+
+				// TODO: drop current reference
+				if (node.current instanceof Array) {
+					node.current[index].#nodes = nodesInItem(currentNode)
+				}
 				currentNode.remove()
 			} else {
 				/** @type {Extract<DynamicNode, {type: 'content'}> | undefined} */
@@ -859,7 +863,10 @@ export class DynamicFragment {
 					dynamicNode.element[key] = newValue
 					break;
 				case 'content':
-					if (value instanceof DynamicFragment && dynamicNode.current?.strings == value.strings) {
+					if (
+						value instanceof DynamicFragment &&
+						dynamicNode.current instanceof DynamicFragment &&
+						dynamicNode.current.strings == value.strings) {
 						// strings are the same. Just move the values
 						dynamicNode.current.values = value.values
 						break
@@ -868,9 +875,34 @@ export class DynamicFragment {
 					range.setStartAfter(dynamicNode.start)
 					range.setEndBefore(dynamicNode.end)
 
-					// Clear previous
-					if (dynamicNode.current) {
-						// store previous nested
+
+					if (dynamicNode.current instanceof Array) {
+						if (value instanceof Array) {
+
+							/** @type {DynamicFragment[]} */
+							const nextArray = value
+
+							/** @type {DynamicFragment[]} */
+							const previousArray = previousValue
+
+							if (nextArray.length && previousArray.length &&
+								previousArray.every(fragment => fragment.#key) &&
+								nextArray.every(fragment => fragment.#key)) {
+
+								// TODO: Set current value to this instead
+								dynamicNode.current = this.#keyedListUpdate(dynamicNode.current, nextArray, dynamicNode)
+							} else {
+								// TODO: this one mutates incoming array. Instead return new accepted values
+								this.#simpleListUpdate(previousArray, nextArray, dynamicNode.current, dynamicNode)
+							}
+						} else {
+							this.#simpleListUpdate(previousValue, [], dynamicNode.current, dynamicNode)
+
+							this.#updateWithContent(value, dynamicNode)
+						}
+						break
+					} else if (dynamicNode.current instanceof DynamicFragment) {
+						// store previous fragment
 						dynamicNode.current.#unmount()
 						this.#cacheFragment(dynamicNode.current)
 					} else {
@@ -878,41 +910,13 @@ export class DynamicFragment {
 					}
 
 					if (value instanceof Array) {
-						// TODO: This will be fixed when array and content are one type
-						dynamicNode.type = 'array'
 						dynamicNode.current = []
-						this.#simpleListUpdate([], value, dynamicNode)
+						this.#simpleListUpdate([], value, dynamicNode.current, dynamicNode)
 						return
 					} else {
 						this.#updateWithContent(value, dynamicNode)
 					}
 					break
-				case 'array':
-
-					if (!(value instanceof Array)) {
-						// This clears existing elements
-						this.#simpleListUpdate(previousValue, [], dynamicNode)
-
-						// TODO: This is fixed when array and content are one type
-						dynamicNode.type = 'content'
-						this.#updateWithContent(value, dynamicNode)
-						return
-					}
-
-					/** @type {DynamicFragment[]} */
-					const nextArray = value
-
-					/** @type {DynamicFragment[]} */
-					const previousArray = previousValue
-
-					if (nextArray.length && previousArray.length &&
-						previousArray.every(fragment => fragment.#key) &&
-						nextArray.every(fragment => fragment.#key)) {
-						this.#keyedListUpdate(previousArray, nextArray, dynamicNode)
-					} else {
-						this.#simpleListUpdate(previousArray, nextArray, dynamicNode)
-					}
-
 			}
 		})
 	}
@@ -955,16 +959,17 @@ export class DynamicFragment {
 	/**
 	 * @param {DynamicFragment[]} previousArray
 	 * @param {DynamicFragment[]} nextArray
-	 * @param {Extract<DynamicNode, {type: 'array'}>} dynamicNode
+	 * @param {DynamicFragment[]} currentFragments
+	 * @param {Extract<DynamicNode, {type: 'content'}>} dynamicNode
 	 */
-	#simpleListUpdate(previousArray, nextArray, dynamicNode) {
+	#simpleListUpdate(previousArray, nextArray, currentFragments, dynamicNode) {
 
 		// Remove and cache fragments when array is shorter
 		if (previousArray.length > nextArray.length) {
 
-			while (dynamicNode.current.length > nextArray.length) {
+			while (currentFragments.length > nextArray.length) {
 
-				const activeFragment = dynamicNode.current.pop()
+				const activeFragment = currentFragments.pop()
 
 				if (!activeFragment) throw new Error('Unexpected Error: Did not find active fragment to cache')
 
@@ -982,21 +987,21 @@ export class DynamicFragment {
 				if (cachedFragment) {
 					if (!cachedFragment.#nodes) throw new Error('no nodes found??')
 					fragmentToInsert.append(...cachedFragment.#nodes)
-					dynamicNode.current.push(cachedFragment)
+					currentFragments.push(cachedFragment)
 					// and update its values, to update its contents
 					cachedFragment.values = newFragment.values
 				} else {
 					fragmentToInsert.append(newFragment.#buildFragment(this.#eventHandlerContext))
-					dynamicNode.current.push(newFragment)
+					currentFragments.push(newFragment)
 				}
 
 			}
-			dynamicNode.end.parentNode?.insertBefore(fragmentToInsert, dynamicNode.end)
+			dynamicNode.end.before(fragmentToInsert)
 		}
 
 		// Update the ones not touched by insertion/removal
 		for (let index = 0; index < Math.min(previousArray.length, nextArray.length); index += 1) {
-			const activeFragment = dynamicNode.current[index]
+			const activeFragment = currentFragments[index]
 			const next = nextArray[index]
 
 			// if (!nextNode) throw new Error('Array content is malformed. Document does not match data source.')
@@ -1014,13 +1019,13 @@ export class DynamicFragment {
 
 					// and update its values, to update its contents
 					cachedFragment.values = next.values
-					dynamicNode.current[index] = cachedFragment
+					currentFragments[index] = cachedFragment
 				} else {
 
 					next.#buildFragment(this.#eventHandlerContext)
 					activeFragment.#replaceWith(next)
 
-					dynamicNode.current[index] = next
+					currentFragments[index] = next
 				}
 
 			}
@@ -1028,44 +1033,47 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @param {DynamicFragment[]} previousArray
+	 * @param {DynamicFragment[]} currentFragments
 	 * @param {DynamicFragment[]} nextArray
-	 * @param {Extract<DynamicNode, {type: 'array'}>} dynamicNode
+	 * @param {Extract<DynamicNode, {type: 'content'}>} dynamicNode
 	 */
-	#keyedListUpdate(previousArray, nextArray, dynamicNode) {
-		let keysState = previousArray.map(fragment => fragment.#key)
-		const nextKeys = nextArray.map(fragment => fragment.#key)
+	#keyedListUpdate(currentFragments, nextArray, dynamicNode) {
 
-
-		let state = dynamicNode.current
-
-		/** @type {Set<number>} */
-		const usedItemIndices = new Set()
+		/** @type {Map<number, number>} */
+		const indexMapping = new Map()
 
 		/** @type {DynamicFragment?} */
 		let currentFragment = null
 
+		for (let index = 0; index < currentFragments.length; index++) {
+			const fragment = currentFragments[index]
+			const nextIndex = nextArray.findIndex(nextFragment => nextFragment.#key == fragment.#key && nextFragment.strings == fragment.strings)
+			if (nextIndex == -1) {
+				fragment.#unmount()
+				this.#cacheFragment(fragment)
+				currentFragments.splice(index, 1)
+				index -= 1
+			} else {
+				indexMapping.set(nextIndex, index)
+			}
+		}
 
 		const mappedNext = nextArray.map((nextFragment, index) => {
 
-			const previousIndex = dynamicNode.current.findIndex(currentFragment =>
-				currentFragment.#key == nextFragment.#key &&
-				currentFragment.strings == nextFragment.strings
-			)
+			const previousIndex = indexMapping.get(index) ?? -1
 
 			/** @type {DynamicFragment} */
 			let fragmentToAppend
 
 			if (previousIndex != -1) {
-				const previousFragment = dynamicNode.current[previousIndex]
+				const previousFragment = currentFragments[previousIndex]
 				previousFragment.values = nextFragment.values
-				usedItemIndices.add(previousIndex)
 				if (index == previousIndex) {
 					console.log('Item did not move in update, just move values')
 					currentFragment = previousFragment
 					return previousFragment
 				}
-				console.log('Reusable ietm found in array, but needs moving')
+				console.log('Reusable item found in array, but needs moving')
 				fragmentToAppend = previousFragment
 
 			} else {
@@ -1095,101 +1103,7 @@ export class DynamicFragment {
 			return fragmentToAppend
 		})
 
-		dynamicNode.current.forEach((fragment, index) => {
-			if (!usedItemIndices.has(index)) {
-				console.log('removing one')
-				fragment.#unmount()
-				this.#cacheFragment(fragment)
-			}
-		})
-
-		// TODO: remove the current property, and use prev value
-		dynamicNode.current = mappedNext
-
-		return
-
-		// console.log('update', keysState, nextKeys, state)
-
-		console.log('before delete', state.map(fra => fra.#key))
-
-		// Remove and cache the ones no longer present
-		keysState = keysState.filter((key, index) => {
-			if (!nextKeys.includes(key)) {
-				console.log('an item was removed', key, index)
-				// const fragmentToRemove = state[index]
-
-				//TODO: Den här raden är fel!
-				state.splice(index, 1)
-				// previousKeys.splice(index, 1)
-				fragmentToRemove.#unmount()
-				this.#cacheFragment(fragmentToRemove)
-				return false
-			}
-			return true
-		})
-		// state = state.filter(Boolean)
-		console.log('before insert', state.map(fra => fra.#key))
-
-		// Insert new ones
-		nextKeys.forEach((key, index) => {
-			if (!keysState.includes(key)) {
-				console.log('a new key in the list')
-				keysState.splice(index, 0, key)
-
-				const newFragment = nextArray[index]
-				const cachedFragment = this.#getCached(newFragment)
-				/** @type {DynamicFragment} */
-				let fragmentToInsert
-				if (cachedFragment) {
-					if (!cachedFragment.#nodes) {
-						console.log('crashen', cachedFragment)
-						throw new Error('no nodes found??')
-					}
-					// fragmentToInsert.append(...cachedFragment.#nodes)
-					// dynamicNode.current.push(cachedFragment)
-					// and update its values, to update its contents
-					state.splice(index, 0, cachedFragment)
-					// state[index + 1].#before(cachedFragment.#nodes)
-					fragmentToInsert = cachedFragment
-					cachedFragment.values = newFragment.values
-				} else {
-					newFragment.#buildFragment(this.#eventHandlerContext)
-					// fragmentToInsert.append()
-					// dynamicNode.current.push(newFragment)
-					state.splice(index, 0, newFragment)
-					fragmentToInsert = newFragment
-				}
-				const nextItem = state[index + 1]
-				if (nextItem) {
-					nextItem.#before(fragmentToInsert)
-				} else {
-					for (const node of fragmentToInsert.#nodes ?? []) {
-						dynamicNode.end.parentNode?.insertBefore(node, dynamicNode.end)
-					}
-				}
-				// state[index + 1].#before(fragmentToInsert)
-			}
-		})
-
-		console.log('before moving', dynamicNode.current.map(fra => fra.#key))
-
-		for (let index = 0; index < nextKeys.length; index++) {
-			const key = nextKeys[index]
-			const previousIndex = keysState.indexOf(key)
-			if (index != previousIndex) {
-				console.log('moving ', state[previousIndex].#nodes, 'to before', state[index])
-
-				keysState.splice(index, 0, ...keysState.splice(previousIndex, 1))
-
-				state[previousIndex].values = nextArray[index].values
-				state[index].#before(state[previousIndex])
-				state.splice(index, 0, ...state.splice(previousIndex, 1))
-
-			} else {
-				state[index].values = nextArray[index].values
-			}
-		}
-		console.log('after moving', dynamicNode.current.map(fra => fra.#key))
+		return mappedNext
 	}
 
 	/** @type {string?} */

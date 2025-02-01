@@ -320,6 +320,7 @@ describe('Dynamic fragments', () => {
 
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
+		// This verifies that the cache has been used
 		expect(testContainer.querySelector('li')).to.equal(fisrtLi)
 	})
 
