@@ -215,26 +215,6 @@ function updateElementWithSharedState(element, sharedState) {
 }
 
 
-/**
- * @param {Element|DocumentFragment|ShadowRoot|null} referenceElement
- * @param {Exclude<AttributeLocator, {type: 'attributeExtension'}>} locator
- */
-function locateElement(referenceElement, locator) {
-	const dataAttribute = `${attributePrefix}-${locator.attribute}`
-
-
-	if (referenceElement instanceof HTMLElement &&
-		referenceElement.getAttribute(dataAttribute) == locator.dataAttributeValue) {
-
-		referenceElement.removeAttribute(dataAttribute)
-		return referenceElement
-	}
-	const element = referenceElement?.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
-	element?.removeAttribute(dataAttribute)
-
-	return element
-}
-
 export class DynamicFragment {
 
 	/**
@@ -457,33 +437,24 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @template {Element|null} SelfElementTemplate
-	 * @param {SelfElementTemplate extends Element ? null : Element|ShadowRoot|DocumentFragment} container
-	 * @param {SelfElementTemplate} selfElement
-	 * @param {any=} eventHandlerContext
+	 * @param {any} eventHandlerContext
 	 */
-	#connectAttributes(container, selfElement, eventHandlerContext) {
+	#connectAttributes(eventHandlerContext) {
 
 		// first traverse children
 		this.#dynamicNodes.forEach((node) => {
 			if (node.type == 'content') {
+				/** @type {Element|ShadowRoot|DocumentFragment} */
+				// @ts-ignore
+				const parent = node.start.parentNode
 				if (node.current instanceof Array) {
-					// FIX: The iteration assumption one element per item is no longer correct
-					/** @type {Element} */
-					// @ts-ignore (There should be an element for every item in the array)
-					let currentElement = node.start.nextElementSibling
 					for (const arrayNode of node.current) {
-
-						arrayNode.#connectAttributes(null, currentElement, eventHandlerContext)
-						// @ts-ignore (There should be an element for every item in the array)
-						currentElement = currentElement.nextElementSibling
+						arrayNode.#connectAttributes(eventHandlerContext)
 					}
 
 				} else if (node.current) {
-					/** @type {Element|ShadowRoot|DocumentFragment} */
-					// @ts-ignore
-					const parent = node.start.parentNode
-					node.current.#connectAttributes(parent, null, eventHandlerContext)
+
+					node.current.#connectAttributes(eventHandlerContext)
 				}
 			}
 		})
@@ -494,10 +465,9 @@ export class DynamicFragment {
 				return
 			}
 
-			const element = locateElement(selfElement ?? container, locator)
+			const element = this.#locateElement(locator)
 
 			if (!element) {
-				console.log(selfElement ?? container, locator)
 				throw new Error(`Could not connect attribute of type: ${locator.type}`)
 			}
 
@@ -542,6 +512,32 @@ export class DynamicFragment {
 	}
 
 	/**
+	 * @param {Exclude<AttributeLocator, {type: 'attributeExtension'}>} locator
+	 */
+	#locateElement(locator) {
+		if (!this.#nodes) {
+			throw new Error('Can not locate element when fragment is not mounted')
+		}
+
+		const dataAttribute = `${attributePrefix}-${locator.attribute}`
+
+		/** @type {Element?} */
+		let element = null
+
+		const firstNode = this.#nodes[0]
+		if (this.#nodes.length == 1 && firstNode instanceof HTMLElement) {
+			element = firstNode.getAttribute(dataAttribute) == locator.dataAttributeValue ?
+				firstNode : firstNode.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
+		} else {
+			const parent = firstNode.parentElement
+			element = parent?.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`) ?? null
+		}
+		element?.removeAttribute(dataAttribute)
+
+		return element
+	}
+
+	/**
 	 * @param {AttributeLocator} locator
 	 * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
 	 * @param {Event} event
@@ -583,6 +579,7 @@ export class DynamicFragment {
 	 * @param {any=} eventHandlerContext
 	 */
 	hydrate(container, eventHandlerContext) {
+		this.#nodes = [...container.childNodes]
 		if (!this.#attributeLocators) {
 			// parse the html once to find attributes
 			this.getHtmlString()
@@ -688,7 +685,7 @@ export class DynamicFragment {
 			currentNode.textContent = ''
 		}
 
-		this.#connectAttributes(container, null, eventHandlerContext)
+		this.#connectAttributes(eventHandlerContext)
 
 		this.#eventHandlerContext = eventHandlerContext
 	}
@@ -704,7 +701,6 @@ export class DynamicFragment {
 		const htmlString = this.getHtmlString()
 		container.innerHTML = htmlString
 		this.hydrate(container, eventHandlerContext)
-		this.#nodes = [...container.childNodes]
 	}
 
 	#unmount() {
@@ -737,18 +733,6 @@ export class DynamicFragment {
 	}
 
 	/** @param {DynamicFragment} fragment */
-	#before(fragment) {
-		if (!this.#nodes) throw new Error('Can not add something before an unmounted fragment')
-		if (!fragment.#nodes) throw new Error('Can not before something thas has no nodes')
-
-		const firstNode = this.#nodes[0]
-		const parent = firstNode?.parentElement
-		for (const node of fragment.#nodes) {
-			parent?.insertBefore(node, firstNode)
-		}
-	}
-
-	/** @param {DynamicFragment} fragment */
 	#after(fragment) {
 		if (!this.#nodes) throw new Error('Can not add something after an unmounted fragment')
 		if (!fragment.#nodes) throw new Error('Can not add something that has no nodes')
@@ -769,7 +753,6 @@ export class DynamicFragment {
 		template.innerHTML = this.getHtmlString()
 
 		this.hydrate(template.content, eventHandlerContext)
-		this.#nodes = [...template.content.childNodes]
 		return template.content
 	}
 

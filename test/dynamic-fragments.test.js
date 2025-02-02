@@ -327,7 +327,10 @@ describe('Dynamic fragments', () => {
 	it('list of items with multiple elements', () => {
 		const list = [{ term: 'term1', def: 'def1' }, { term: 'term2', def: 'def2' }]
 
-		const getEntries = () => list.map(({ term, def }) => html`<dt>${term}</dt><dd>${def}</dd>`)
+		const dtClass = 'dt-class'
+		const ddClass = 'dd-class'
+
+		const getEntries = () => list.map(({ term, def }) => html`<dt class=${dtClass}>${term}</dt><dd class=${ddClass}>${def}</dd>`)
 
 		const fragment = html`<dl>
 			${getEntries()}
@@ -378,7 +381,6 @@ describe('Dynamic fragments', () => {
 			list.splice(1, 0, first)
 		}
 
-		console.log('third test')
 		fragment.values = [getEntries()]
 		expect(testContainer.innerText).to.equal('inserted\nupdate test 1\ntest 2\ntest 3')
 	})
