@@ -839,7 +839,6 @@ export class DynamicFragment {
 					if (previousValue instanceof PropertySetter &&
 						previousValue.key == key && previousValue.value == newValue
 					) {
-						console.log('skip update, nothing changed')
 						return
 					}
 					// @ts-ignore
@@ -1052,34 +1051,27 @@ export class DynamicFragment {
 				const previousFragment = currentFragments[previousIndex]
 				previousFragment.values = nextFragment.values
 				if (index == previousIndex) {
-					console.log('Item did not move in update, just move values')
 					currentFragment = previousFragment
 					return previousFragment
 				}
-				console.log('Reusable item found in array, but needs moving')
 				fragmentToAppend = previousFragment
 
 			} else {
-				console.log('key', nextFragment.#key, 'not present in prev')
 				const cachedFragment = this.#getCached(nextFragment)
 
 				if (cachedFragment && nextFragment.#key) {
-					console.log('restore from cache, move key and values')
 					cachedFragment.key(nextFragment.#key)
 					cachedFragment.values = nextFragment.values
 					fragmentToAppend = cachedFragment
 				} else {
-					console.log('building new, most expensive')
 					nextFragment.#buildFragment(this.#eventHandlerContext)
 					fragmentToAppend = nextFragment
 				}
 			}
 
 			if (currentFragment) {
-				console.log('adding', fragmentToAppend.#key, 'after', currentFragment.#key)
 				currentFragment.#after(fragmentToAppend)
 			} else {
-				console.log('No current fragment. Adding first item')
 				dynamicNode.start.after(...fragmentToAppend.#nodes ?? [])
 			}
 			currentFragment = fragmentToAppend

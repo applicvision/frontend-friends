@@ -372,7 +372,6 @@ describe('Dynamic fragments', () => {
 
 		fragment.values = [getEntries()]
 
-		console.log(testContainer.innerHTML)
 		expect(testContainer.innerText).to.equal('test 1\ninserted\ntest 2\ntest 3')
 
 		const first = list.shift()
