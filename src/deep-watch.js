@@ -8,7 +8,7 @@
 function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 	// replace all properties which are object with new proxies
 	for (var property in blueprint) {
-		if (typeof blueprint[property] == 'object') {
+		if (blueprint[property] && typeof blueprint[property] == 'object') {
 			blueprint[property] = recursiveWatch(blueprint[property], modificationCallback, keyPath.concat(property))
 		}
 	}

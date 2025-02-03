@@ -43,10 +43,10 @@ export class DynamicIsland extends EventTarget {
 	/** @type {Promise<any>|null} */
 	pendingUpdate = null
 	invalidate() {
-		this.pendingUpdate ??= Promise.resolve().then(() => {
-			console.time('render')
+		return this.pendingUpdate ??= Promise.resolve().then(() => {
+			// console.time('render')
 			this.#internalRender()
-			console.timeEnd('render')
+			// console.timeEnd('render')
 			this.pendingUpdate = null
 			// TODO: maybe signal update
 		})
@@ -97,9 +97,9 @@ export class DynamicIsland extends EventTarget {
 
 			this.#restoreFromCache(this.render(renderArg))
 		} else {
-			console.time('inital render')
+			// console.time('initial render')
 			this.#internalRender()
-			console.timeEnd('inital render')
+			// console.timeEnd('initial render')
 		}
 		this.dispatchEvent(new Event('mounted'))
 	}
@@ -141,9 +141,6 @@ export class DynamicIsland extends EventTarget {
 	#cacheIsland() {
 		if (!(this.container && this.#currentFragment)) return
 
-		const range = document.createRange()
-		range.selectNodeContents(this.container)
-		this.#currentFragment.saveFragment(range.extractContents())
 		this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 	}
 
@@ -194,11 +191,35 @@ export class DynamicIsland extends EventTarget {
 	}
 }
 
+
+/**
+ * @overload
+ * @param {() => ReturnType<html>} renderFunction
+ * @returns {DynamicIsland<{}>}
+ */
+
 /**
  * @template {{[key: string]: any, state?: {[key: string]: any}}} T
+ * @overload
  * @param {() => T} setup
- * @param {((state: T) => ReturnType<html>)} renderFunction
+ * @param {(state: T) => ReturnType<html>} renderFunction
+ * @returns {DynamicIsland<T>}
+*/
+
+// * @template {( (state: T) => ReturnType<typeof html> )|undefined} SecondArgument
+// * @param {SecondArgument extends undefined ? () => ReturnType<html> : () => T} setupOrRender
+
+/**
+ * @template {{[key: string]: any, state?: {[key: string]: any}}} T
+ * @param {() => ReturnType<html> | (() => T)} setupOrRender
+ * @param {(state: T) => ReturnType<typeof html>} [renderFunction]
  */
-export function island(setup, renderFunction) {
-	return new DynamicIsland(setup, renderFunction)
+export function island(setupOrRender, renderFunction) {
+	if (renderFunction) {
+		// const setup = setupOrRender
+		return new DynamicIsland(setupOrRender, renderFunction)
+	}
+	return new DynamicIsland(() => ({}), setupOrRender)
 }
+
+

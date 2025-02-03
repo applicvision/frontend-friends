@@ -1,5 +1,5 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html, innerHTML } from '../src/dynamic-fragment.js'
+import { html, innerHTML, twoway } from '../src/dynamic-fragment.js'
 import expect from '@applicvision/js-toolbox/expect'
 import { addTestContainer, property } from './helpers.js'
 
@@ -146,12 +146,28 @@ describe('Dynamic fragments', () => {
 	it('event handler', () => {
 		let clicked = false
 		const clickHandler = () => clicked = true
-		const fragment = html`<button onclick=${clickHandler}>tryck</button>`
+		const fragment = html`<button onclick=${clickHandler}>tryck</button>${null}`
 		fragment.mount(testContainer)
 
 		testContainer.querySelector('button')?.click()
-
 		expect(clicked).to.be.true()
+
+		let anotherClicked = false
+		const clickHandler2 = () => anotherClicked = true
+
+		fragment.values = [clickHandler2]
+		testContainer.querySelector('button')?.click()
+		expect(anotherClicked).to.be.true()
+
+		anotherClicked = false
+		const clickHandler3 = () => anotherClicked = true
+
+		fragment.values = [() => { }, html`<button onclick=${clickHandler3}>nested</button>`]
+
+		testContainer.querySelectorAll('button')[1]?.click()
+
+		expect(anotherClicked).to.be.true()
+
 	})
 
 	it('event handler with set context', () => {
@@ -304,8 +320,86 @@ describe('Dynamic fragments', () => {
 
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
+		// This verifies that the cache has been used
 		expect(testContainer.querySelector('li')).to.equal(fisrtLi)
+	})
 
+	it('list of items with multiple elements', () => {
+		const list = [{ term: 'term1', def: 'def1' }, { term: 'term2', def: 'def2' }]
+
+		const dtClass = 'dt-class'
+		const ddClass = 'dd-class'
+
+		const getEntries = () => list.map(({ term, def }) => html`<dt class=${dtClass}>${term}</dt><dd class=${ddClass}>${def}</dd>`)
+
+		const fragment = html`<dl>
+			${getEntries()}
+		</dl>`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.innerText).to.equal('term1\ndef1\nterm2\ndef2')
+
+		list.pop()
+
+		fragment.values = [getEntries()]
+
+		expect(testContainer.innerText).to.equal('term1\ndef1')
+
+		list.push({ term: 'new term', def: 'new def' })
+
+		fragment.values = [getEntries()]
+
+		expect(testContainer.innerText).to.equal('term1\ndef1\nnew term\nnew def')
+	})
+
+	it('list with keyed items', () => {
+		const list = [
+			{ id: '123', name: 'test 1' },
+			{ id: '456', name: 'test 2' },
+			{ id: '789', name: 'test 3' },
+		]
+
+		const getEntries = () => list.map(({ id, name }) => html`<li>${name}</li>`.key(id))
+
+		const fragment = html`<ul>${getEntries()}</ul>`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.innerText).to.equal('test 1\ntest 2\ntest 3')
+
+		list.splice(1, 0, { id: 'new', name: 'inserted' })
+
+		fragment.values = [getEntries()]
+
+		expect(testContainer.innerText).to.equal('test 1\ninserted\ntest 2\ntest 3')
+
+		const first = list.shift()
+		if (first) {
+			first.name = 'update test 1'
+			list.splice(1, 0, first)
+		}
+
+		fragment.values = [getEntries()]
+		expect(testContainer.innerText).to.equal('inserted\nupdate test 1\ntest 2\ntest 3')
+	})
+
+	it('switch between array and content', () => {
+		const getList = () => [1, 2, 3].map(item => html`<div>${item}</div>`)
+
+		const fragment = html`${html`<div>loading</div>`}`
+
+		fragment.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('loading')
+
+		fragment.values = [getList()]
+
+		expect(testContainer.textContent).to.equal('123')
+
+		fragment.values = [html`<div>loading again</div>`]
+
+		expect(testContainer.textContent).to.equal('loading again')
 	})
 
 	it('only text', () => {
@@ -373,9 +467,26 @@ describe('Dynamic fragments', () => {
 		/** @type {HTMLDetailsElement} */
 		// @ts-ignore
 		const details = testContainer.firstElementChild
-		expect(details.open).to.be.true
+		expect(details.open).to.be.true()
 
 		fragment.values = [property('open', false)]
-		expect(details.open).to.be.false
+		expect(details.open).to.be.false()
+	})
+
+	it('Shared state', () => {
+		const state = { value: 'initial' }
+		const fragment = html`<input ff-share=${twoway(state, 'value')}>`
+		fragment.mount(testContainer)
+
+		const input = testContainer.querySelector('input')
+
+		expect(input?.value).to.equal('initial')
+
+		input?.setRangeText('new value', 0, 8)
+		input?.dispatchEvent(new Event('input'))
+
+		expect(input?.value).to.equal('new value')
+
+		expect(state.value).to.equal('new value')
 	})
 })
