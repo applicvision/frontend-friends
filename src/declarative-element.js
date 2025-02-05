@@ -9,11 +9,12 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
  * @template [SharedState=null]
- * @implements {StoreSubscriber} 
+ * @implements {StoreSubscriber}
  **/
 export class DeclarativeElement extends HTMLElement {
 
-	constructor() {
+	/** @param {{sharedStateName?: string}=} options */
+	constructor(options) {
 		super()
 		const shadowRoot = this.attachShadow({ mode: 'open' })
 		/** @type {typeof DeclarativeElement} */
@@ -26,7 +27,18 @@ export class DeclarativeElement extends HTMLElement {
 			this._provisionalStateBinding = null
 			this.#lastSharedState = this.sharedState
 		}
+
+		if (options?.sharedStateName) {
+			this.#internals = this.attachInternals()
+			this.#sharedStateName = options.sharedStateName
+		}
 	}
+
+	/** @type {string?} */
+	#sharedStateName = null
+
+	/** @type {ElementInternals?} */
+	#internals = null
 
 	/** @type {StyleDeclaration|StyleDeclaration[]} */
 	static style = []
@@ -70,6 +82,11 @@ export class DeclarativeElement extends HTMLElement {
 	/** @protected */
 	sharedStateChanged() {
 		this.invalidate()
+		if (this.#sharedStateName) {
+			this.sharedState ?
+				this.#internals?.states.add(this.#sharedStateName) :
+				this.#internals?.states.delete(this.#sharedStateName)
+		}
 	}
 
 	/**
@@ -94,8 +111,10 @@ export class DeclarativeElement extends HTMLElement {
 	}
 
 	connectedCallback() {
-		this.#internalRender()
-		this.#mounted = true
+		if (!this.isMounted) {
+			this.#internalRender()
+			this.#mounted = true
+		}
 	}
 
 	attributeChangedCallback() {
