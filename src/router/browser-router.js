@@ -44,7 +44,7 @@ export class Router extends BaseRouter {
 		const { route: previousRoute, path: previousPath } = this
 
 		if (!this.resolve(destination)) {
-			console.log('not found, handle')
+			// console.log('not found, handle')
 			return
 		}
 
@@ -94,7 +94,7 @@ export class Router extends BaseRouter {
 		}
 
 		if (!(container && routeChainToLoad)) {
-			console.log('Ooops, dont know where to put view')
+			// console.log('Ooops, dont know where to put view')
 			throw new Error('Can not render')
 
 		}

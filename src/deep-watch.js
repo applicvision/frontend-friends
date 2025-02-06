@@ -73,6 +73,27 @@ export function deepWatch(target, modificationCallback) {
 	return recursiveWatch(target, modificationCallback)
 }
 
+/**
+ * Pass an object to deep watch. The `effect` function is called asynchronously on changes.
+ * @template {{[key: string|symbol]: any}} T
+ * @param {T} target
+ * @param {(target: T) => void} effect
+ * @returns {T}
+ */
+export function effect(target, effect) {
+	/** @type {Promise<any>|null} */
+	let effectPromise = null
+
+	const watchedObject = deepWatch(target, () => {
+		effectPromise ??= Promise.resolve().then(() => {
+			effect(watchedObject)
+			effectPromise = null
+		})
+	})
+
+	return watchedObject
+}
+
 
 /**
  * @template KeyType, ValueType

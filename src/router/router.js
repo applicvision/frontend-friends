@@ -111,10 +111,10 @@ export class Router extends BaseRouter {
 		server.on('request', async (request, response) => {
 			if (request.url?.startsWith(path)) {
 				if (response.writableEnded || response.headersSent) {
-					console.log('Response has been sent', request.url)
+					// console.log('Response has been sent', request.url)
 					return
 				}
-				console.log('Router got request', request.url)
+
 				if (this.resolve(request.url)) {
 					clearStore(this.store)
 					response.writeHead(200, { 'content-type': 'text/html' })

@@ -27,9 +27,6 @@
   "files": [
     "src"
   ],
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "devDependencies": {
     "@applicvision/js-toolbox": "latest",
     "@playwright/test": "^1.41.2"

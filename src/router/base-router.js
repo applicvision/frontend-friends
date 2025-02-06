@@ -267,7 +267,7 @@ export class BaseRouter {
 		this.routerLocation = setup.routerLocation
 		this.baseView = setup.baseView
 		this.routes = rootRoutes.flatMap(route => route.routeList)
-		console.log('allroutes', this.routes)
+		// console.log('allroutes', this.routes)
 	}
 
 	/**
@@ -302,8 +302,11 @@ export class BaseRouter {
 		return false
 	}
 
+	/**
+	 * @abstract
+	 */
 	async render() {
-		console.log('implemented by subclass')
+		// Implemented by subclass
 		return ''
 	}
 
