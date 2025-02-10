@@ -4,8 +4,8 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>ApplicVision - Frontend Friends</title>
-	<link rel="stylesheet" href="/css/main.css">
-	<link rel="stylesheet" href="/css/todo.css">
+	<link rel="stylesheet" href="/frontend-friends/css/main.css">
+	<link rel="stylesheet" href="/frontend-friends/css/todo.css">
 	<script type="importmap">
 		{
 			"imports": {
@@ -18,14 +18,14 @@
 	<h1>TODO</h1>
 	<nav id="breadcrumb">
 		<ol>
-			<li><a href="/">Home</a></li>
-			<li><a href="/examples" class="active">examples</a></li>
-			<li><a href="/examples/todo" class="active">Todo</a></li>
+			<li><a href="/frontend-friends">Home</a></li>
+			<li><a href="/frontend-friends/examples" class="active">examples</a></li>
+			<li><a href="/frontend-friends/examples/todo" class="active">Todo</a></li>
 		</ol>
 	</nav>
 	<div id="app"></div>
 	<script type="module">
-		import app from '/js/todo-app.js'
+		import app from '/frontend-friends/js/todo-app.js'
 
 		const container = document.getElementById('app')
 		if (container) {
