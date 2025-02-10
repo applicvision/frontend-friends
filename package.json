@@ -4,6 +4,7 @@
   "description": "Build frontend easily",
   "type": "module",
   "repository": "github:applicvision/frontend-friends",
+  "main": "./src/index.js",
   "exports": {
     ".": "./src/index.js",
     "./declarative-element": "./src/declarative-element.js",
