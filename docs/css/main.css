@@ -1,0 +1,55 @@
+:root {
+	--text-color: #ccc;
+	--background-color: #222;
+	--destructive-color: #c22;
+	--link-color: #99f;
+}
+
+body {
+	background: var(--background-color);
+	color: var(--text-color);
+	font-family: system-ui;
+}
+
+h1 {
+	text-align: center;
+}
+
+
+#breadcrumb {
+	position: absolute;
+	top: 0;
+	left: 0;
+	padding: 5px;
+
+	ol {
+		list-style: none;
+
+		li {
+			display: inline-block;
+		}
+
+		li:not(:last-child)::after {
+			content: '>';
+			margin-left: 5px;
+		}
+	}
+
+	a {
+		color: var(--link-color);
+	}
+}
+
+#links {
+	margin-top: 100px;
+	text-align: center;
+	font-size: larger;
+
+	ul {
+		list-style: none;
+	}
+
+	a {
+		color: var(--text-color);
+	}
+}
