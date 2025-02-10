@@ -89,8 +89,10 @@ button.destructive {
 
 #filter {
 	display: flex;
-	accent-color: #444;
+	accent-color: rgb(192, 163, 0);
 	justify-content: space-between;
+	align-items: center;
+	padding-bottom: 12px;
 	gap: 10px;
 	border-radius: 6px;
 
@@ -101,5 +103,13 @@ button.destructive {
 	input {
 		scale: 1.4;
 		margin-right: 10px;
+	}
+}
+
+@media (max-width: 500px) {
+	#filter section {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 	}
 }

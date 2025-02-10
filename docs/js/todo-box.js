@@ -19,10 +19,8 @@ export default class TodoBox extends DeclarativeElement {
 			}
 		}
 
-		:host(:state(checked)) {
-			#indicator {
-				scale: 1;
-			}
+		:host(:state(checked)) #indicator {
+			scale: 1;
 		}
 
 		#indicator {
