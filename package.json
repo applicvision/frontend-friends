@@ -3,6 +3,7 @@
   "version": "1.0.2",
   "description": "Build frontend easily",
   "type": "module",
+  "license": "MIT",
   "repository": "github:applicvision/frontend-friends",
   "main": "./src/index.js",
   "exports": {
