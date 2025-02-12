@@ -80,6 +80,13 @@ export class DeclarativeElement extends HTMLElement {
 	}
 
 	/** @protected */
+	forwardSharedState() {
+		// A placeholder is needed because the generation of the html string checks the type passed to ff-share.
+		// And at that time the binding has not been set
+		return this.#twowayBinding ?? twowayPlaceholder
+	}
+
+	/** @protected */
 	sharedStateChanged() {
 		this.invalidate()
 		if (this.#sharedStateName) {
@@ -231,6 +238,13 @@ class InnerCSS {
 		this.stringValue = cssString
 	}
 }
+
+/** @type {TwowayBinding} */
+const twowayPlaceholder = {
+	get: () => null,
+	set: () => { }
+}
+
 
 /**
  * @param {TemplateStringsArray} strings

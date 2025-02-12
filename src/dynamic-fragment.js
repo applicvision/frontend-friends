@@ -210,7 +210,7 @@ function updateElementWithSharedState(element, sharedState) {
 			option.selected = selectedOptions.includes(option.value)
 		}
 	} else {
-		element.value = sharedState.get()
+		element.value = newValue
 	}
 }
 
