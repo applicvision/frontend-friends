@@ -61,7 +61,8 @@ input[name=title] {
 			height: 32px;
 			opacity: 0.7;
 
-			&:hover {
+			&:hover,
+			&:focus {
 				opacity: 1
 			}
 		}
@@ -70,7 +71,8 @@ input[name=title] {
 		opacity: 0;
 	}
 
-	&:hover .actions {
+	&:hover .actions,
+	&:focus-within .actions {
 		opacity: 1;
 	}
 }

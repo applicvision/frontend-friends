@@ -30,14 +30,18 @@ export class DynamicIsland extends EventTarget {
 	/** @type {AnyRoute | null} */
 	routeSubscription = null
 
+	#render
+
+	#setup
+
 	/**
 	 * @param {() => T} setup
 	 * @param {((state: T) => ReturnType<html>)} renderFunction
 	 */
 	constructor(setup, renderFunction) {
 		super()
-		this.render = renderFunction
-		this.setup = setup
+		this.#render = renderFunction
+		this.#setup = setup
 	}
 
 	/** @type {Promise<any>|null} */
@@ -57,7 +61,7 @@ export class DynamicIsland extends EventTarget {
 	}
 
 	routeChanged() {
-		const { state, ...otherProps } = this.setup()
+		const { state, ...otherProps } = this.#setup()
 		this.#renderProps = otherProps
 		this.state = state
 		this.#internalRender()
@@ -78,7 +82,7 @@ export class DynamicIsland extends EventTarget {
 	#reactiveSetup() {
 		const { state, ...otherProps } = routeSubscribe(
 			this,
-			() => storeSubscribe(this, this.setup))
+			() => storeSubscribe(this, this.#setup))
 
 		this.#renderProps = otherProps
 		this.state = state
@@ -95,7 +99,7 @@ export class DynamicIsland extends EventTarget {
 			// @ts-ignore
 			const renderArg = { ...this.#renderProps, state: this.state }
 
-			this.#restoreFromCache(this.render(renderArg))
+			this.#restoreFromCache(this.#render(renderArg))
 		} else {
 			// console.time('initial render')
 			this.#internalRender()
@@ -115,14 +119,14 @@ export class DynamicIsland extends EventTarget {
 		// @ts-ignore
 		const renderArg = { ...this.#renderProps, state: this.state }
 
-		const dynamicFragment = this.render(renderArg)
+		const dynamicFragment = this.#render(renderArg)
 		dynamicFragment.hydrate(container)
 		this.#currentFragment = dynamicFragment
 		this.container = container
 	}
 
 	get hydratable() {
-		return this.render(this.setup()).toString()
+		return this.#render(this.#setup()).toString()
 	}
 
 	unmout() {
@@ -174,7 +178,7 @@ export class DynamicIsland extends EventTarget {
 		// @ts-ignore
 		const renderArg = { ...this.#renderProps, state: this.state }
 
-		const dynamicFragment = this.render(renderArg)
+		const dynamicFragment = this.#render(renderArg)
 		if (!this.#currentFragment) {
 			dynamicFragment.mount(this.container)
 			this.#currentFragment = dynamicFragment
@@ -205,9 +209,6 @@ export class DynamicIsland extends EventTarget {
  * @param {(state: T) => ReturnType<html>} renderFunction
  * @returns {DynamicIsland<T>}
 */
-
-// * @template {( (state: T) => ReturnType<typeof html> )|undefined} SecondArgument
-// * @param {SecondArgument extends undefined ? () => ReturnType<html> : () => T} setupOrRender
 
 /**
  * @template {{[key: string]: any, state?: {[key: string]: any}}} T

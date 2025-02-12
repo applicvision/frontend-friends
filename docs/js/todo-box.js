@@ -14,7 +14,7 @@ export default class TodoBox extends DeclarativeElement {
 			transition: border 0.1s ease-out;
 			border: 2px solid var(--accent-color);
 			opacity: 0.7;
-			&:hover {
+			&:hover, &:focus {
 				opacity: 1;
 			}
 		}
