@@ -43,6 +43,9 @@ export class DeclarativeElement extends HTMLElement {
 	/** @type {StyleDeclaration|StyleDeclaration[]} */
 	static style = []
 
+	/** @type {string[]} */
+	static observedAttributes = []
+
 	/**
 	 * @private
 	 * @type {CSSStyleSheet[]}

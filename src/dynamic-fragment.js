@@ -776,7 +776,7 @@ export class DynamicFragment {
 
 		const { node, attribute, prefix = '', suffix = '' } = attributeNode
 
-		let newValue = (prefix + (newValues[index] ?? '') + suffix).trim()
+		let newValue = prefix.trimStart() + (newValues[index] ?? '') + suffix
 
 		for (let node = this.#dynamicNodes[++index];
 			node?.type == 'attributeExtension';
