@@ -30,18 +30,19 @@ describe('Declarative Element component', () => {
 		}
 	}
 
-	class Sanitizer extends DeclarativeElement {
-		static observedAttributes = ['html']
+	class AttributedElement extends DeclarativeElement {
+		static observedAttributes = ['attr-one', 'attr-two']
 
 		render() {
-			const htmlcontent = this.getAttribute('html')
-			return html`<div>${htmlcontent ? innerHTML(htmlcontent) : html`starten`}</div>`
+			const attrOne = this.getAttribute('attr-one') ?? 'no attr one'
+			const attrTwo = this.getAttribute('attr-two') ?? 'no attr two'
+			return html`<div>${attrOne}, ${attrTwo}</div>`
 		}
 	}
 
 	before(() => {
 		customElements.define('test-styled', ColorfulElement)
-		customElements.define('test-sanitizer', Sanitizer)
+		customElements.define('test-attributes', AttributedElement)
 	})
 
 	it('Should be styled', () => {
@@ -51,12 +52,21 @@ describe('Declarative Element component', () => {
 		expect(getComputedStyle(element.shadowRoot.firstElementChild).color).to.equal('rgb(255, 255, 0)')
 	})
 
-	it('testsomething', () => {
-		const testelement = document.createElement('test-sanitizer')
+	it('attributes', async () => {
+		/** @type {AttributedElement} */
+		// @ts-ignore
+		const testelement = document.createElement('test-attributes')
 		testContainer.replaceChildren(testelement)
-		const h1 = document.createElement('h1')
-		h1.textContent = 'nisse'
-		testContainer.appendChild(h1)
-		testelement.setAttribute('html', '<a href="asdasd"><h1>asdasdadsasd<h1>')
+		expect(shadowText(testelement)).to.equal('no attr one, no attr two')
+		testelement.setAttribute('attr-one', 'attr one value')
+
+		await testelement.pendingUpdate
+		expect(shadowText(testelement)).to.equal('attr one value, no attr two')
+
+		testelement.setAttribute('attr-two', 'Second attribute')
+		testelement.removeAttribute('attr-one')
+
+		await testelement.pendingUpdate
+		expect(shadowText(testelement)).to.equal('no attr one, Second attribute')
 	})
 })
