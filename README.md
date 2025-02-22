@@ -166,7 +166,7 @@ function updateName(event) {
 	app.state.name = event.target.value
 }
 
-// Again, we assume an element with id app somewhere in the document.
+// Here we assume an element with id app somewhere in the document.
 app.mount(document.getElementById('app'))
 ```
 
