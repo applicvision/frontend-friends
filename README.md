@@ -29,10 +29,8 @@ const app = island(
   </section>`
 )
 
-app.mount(document.getElementById('app'))
+app.mount(document.body)
 ```
-
-*Please note that this code assumes you have an element with id 'app' somewhere in your HTML document.*
 
 Then to check it out in your browser you have two options; CDN or build tool.
 
@@ -85,7 +83,7 @@ For more information on using Vite, please consult their great documentation at 
 
 ## Creating your first component
 
-Frontend Friends leverages the built in ways to work with components; [Custom elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements). So as soon as the components are defined in the custom elements registry, they can be used anywhere on the page. Either straight in HTML, by dynamic creation `document.createElement`, or even in another view system such as Vue or React.
+Frontend Friends leverages the built-in way to work with components; [Custom elements](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements). So, as soon as the components are defined in the custom elements registry, they can be used anywhere on the page. Either straight in HTML, by dynamic creation `document.createElement`, or even in another view system such as Vue or React.
 
 Let's say we want a greeting component. Here is a simple example:
 
@@ -103,7 +101,7 @@ class GreetingLabel extends DeclarativeElement {
   // It should return a tagged template string, using the imported html function from frontend-friends
   render() {
     
-    // This simple returns markup for a header with text Hello plus the name passed as attribute
+    // This simply returns markup for a header with text Hello plus the name passed as attribute
     return html`<h2>Hello ${this.getAttribute('name')}!</h2>`
   }
 
@@ -114,7 +112,7 @@ class GreetingLabel extends DeclarativeElement {
 
 The name of the element has to include a hyphen, and follow some other [rules](https://developer.mozilla.org/en-US/docs/Web/API/CustomElementRegistry/define#valid_custom_element_names).
 
-The `html` tag function in front of the backtick string literal might look a bit unfamiliar. But it has many advantages. Under the hood it is used both to determine which parts of the template are dynamic and which parts are not, and also to automatically cache pieces of rendered markup for later reuse.
+The `html` tag function in front of the backtick string literal might look a bit unfamiliar. But it has many advantages. Under the hood it is used both to determine which parts of the template are dynamic and which parts are not, and also to automatically cache pieces of rendered markup for potential reuse.
 
 The tagged template strategy is also used in [Lit](https://lit.dev/docs/templates/overview/).
 
@@ -134,33 +132,39 @@ The element can also be created dynamically:
 const greetingLabel = document.createElement('greeting-label')
 greetingLabel.setAttribute('name', 'World')
 document.body.appendChild(greetingLabel)
-// Updating the attribute will rerender the element
+// Updating the attribute will re-render the element
 greetingLabel.setAttribute('name', 'New world')
 ```
 
 ## Creating an island
 
-Now let's use our `greeting-label` in a context together with an input field where the user could enter the name to be passed to the `greeting-label`. To do that, we can define a little 'micro-app', sometimes referred to as [islands](https://jasonformat.com/islands-architecture/).
+Now let's use our `greeting-label` in a context together with an input field where the user could enter the name to be passed to the `greeting-label`. To do that, we can define a little 'micro-app'. These small pieces of logic are sometimes referred to as [islands](https://jasonformat.com/islands-architecture/).
 
 ```javascript
 import { island, html } from '@applicvision/frontend-friends'
 
 const app = island(
-  // The first argument to island can be a 'setup' function.
+  // The first argument to island can be thought of as a setup function. It is called once at island creation.
   // Put your initial state in a property called 'state' on the object returned.
   // Changes to that object will cause the island to update.
   function () { 
     return { state: { name: '' }}
   },
+  // The second argument is the render function.
+  // It is called with the current state of the island every time a visual update is needed.
   ({ state }) => html`
     <input
       placeholder="Enter your name"
       value=${state.name}
-      oninput=${(event) => state.name = event.target.value}
+      oninput=${updateName}
     >
     <greeting-label name=${state.name || 'stranger'}></greeting-label>
   `
 )
+
+function updateName(event) {
+	app.state.name = event.target.value
+}
 
 // Again, we assume an element with id app somewhere in the document.
 app.mount(document.getElementById('app'))
@@ -191,4 +195,4 @@ app.mount(document.getElementById('app'))
 ```
 
 ## Examples
-A more extended example is located in the docs folder. The JavaScript can be found [here](https://github.com/applicvision/frontend-friends/blob/main/docs/js/todo-app.js). And, to check out the result of the example, please visit https://applicvision.github.io/frontend-friends/examples/todo.
+A more extended example is located in the docs folder of the repository. The JavaScript can be found [here](https://github.com/applicvision/frontend-friends/blob/main/docs/js/todo-app.js). And, to check out the result of the example, please visit https://applicvision.github.io/frontend-friends/examples/todo.
