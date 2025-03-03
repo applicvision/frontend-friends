@@ -13,14 +13,14 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
  **/
 export class DeclarativeElement extends HTMLElement {
 
-	/** @param {{sharedStateName?: string}=} options */
-	constructor(options) {
+	constructor() {
 		super()
 		const shadowRoot = this.attachShadow({ mode: 'open' })
-		/** @type {typeof DeclarativeElement} */
-		// @ts-ignore
-		const componentClass = this.constructor
-		shadowRoot.adoptedStyleSheets = componentClass.stylesheets
+
+
+		const { stylesheets, sharedStateName } = this.#componentClass
+
+		shadowRoot.adoptedStyleSheets = stylesheets
 
 		if (this._provisionalStateBinding) {
 			this.#twowayBinding = this._provisionalStateBinding
@@ -28,14 +28,23 @@ export class DeclarativeElement extends HTMLElement {
 			this.#lastSharedState = this.sharedState
 		}
 
-		if (options?.sharedStateName) {
+		if (sharedStateName) {
 			this.#internals = this.attachInternals()
-			this.#sharedStateName = options.sharedStateName
 		}
 	}
 
-	/** @type {string?} */
-	#sharedStateName = null
+
+	get #componentClass() {
+		return /** @type {typeof DeclarativeElement} */(this.constructor)
+	}
+
+
+	/**
+	 * Setting this to a valid string identifier
+	 * will add it to the element's custom state set when the shared state is truthy
+	 * @type {string?}
+	 **/
+	static sharedStateName = null
 
 	/** @type {ElementInternals?} */
 	#internals = null
@@ -92,10 +101,11 @@ export class DeclarativeElement extends HTMLElement {
 	/** @protected */
 	sharedStateChanged() {
 		this.invalidate()
-		if (this.#sharedStateName) {
+		const { sharedStateName } = this.#componentClass
+		if (sharedStateName) {
 			this.sharedState ?
-				this.#internals?.states.add(this.#sharedStateName) :
-				this.#internals?.states.delete(this.#sharedStateName)
+				this.#internals?.states.add(sharedStateName) :
+				this.#internals?.states.delete(sharedStateName)
 		}
 	}
 

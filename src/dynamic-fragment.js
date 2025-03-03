@@ -786,9 +786,10 @@ export class DynamicFragment {
 
 		if (attribute == 'value' && node instanceof HTMLInputElement) {
 			node.value = newValue
+		} else {
+			node.setAttribute(attribute, newValue)
 		}
 
-		node.setAttribute(attribute, newValue)
 	}
 
 	/** @param {any[]} newValues */
