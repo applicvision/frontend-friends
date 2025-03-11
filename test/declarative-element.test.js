@@ -10,6 +10,15 @@ function shadowText(element) {
 	return element.shadowRoot?.textContent ?? ''
 }
 
+/**
+ * @param {HTMLElement} element
+ * @return {HTMLElement}
+ */
+function firstShadowElement(element) {
+	// @ts-ignore
+	return element.shadowRoot?.firstElementChild
+}
+
 describe('Declarative Element component', () => {
 
 	/** @type {HTMLElement} */
@@ -46,16 +55,15 @@ describe('Declarative Element component', () => {
 	})
 
 	it('Should be styled', () => {
-		const element = document.createElement('test-styled')
+		const element = new ColorfulElement
 		testContainer.replaceChildren(element)
-		expect(getComputedStyle(element.shadowRoot.firstElementChild).backgroundColor).to.equal('rgb(0, 128, 0)')
-		expect(getComputedStyle(element.shadowRoot.firstElementChild).color).to.equal('rgb(255, 255, 0)')
+		expect(getComputedStyle(firstShadowElement(element)).backgroundColor).to.equal('rgb(0, 128, 0)')
+		expect(getComputedStyle(firstShadowElement(element)).color).to.equal('rgb(255, 255, 0)')
 	})
 
 	it('attributes', async () => {
-		/** @type {AttributedElement} */
-		// @ts-ignore
-		const testelement = document.createElement('test-attributes')
+
+		const testelement = new AttributedElement
 		testContainer.replaceChildren(testelement)
 		expect(shadowText(testelement)).to.equal('no attr one, no attr two')
 		testelement.setAttribute('attr-one', 'attr one value')

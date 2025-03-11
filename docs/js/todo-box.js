@@ -37,9 +37,7 @@ export default class TodoBox extends DeclarativeElement {
 		}
 	`
 
-	constructor() {
-		super({ sharedStateName: 'checked' })
-	}
+	static sharedStateName = 'checked'
 
 	toggle() {
 		this.sharedState = !this.sharedState

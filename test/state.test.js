@@ -65,6 +65,11 @@ describe('Stateful component', () => {
 
 		static sharedStateName = 'active'
 
+		// Expose the protected method
+		sharedStateChanged() {
+			super.sharedStateChanged()
+		}
+
 		render() {
 			return html`<button
 				onclick=${() => this.sharedState = !this.sharedState}
@@ -79,9 +84,8 @@ describe('Stateful component', () => {
 	})
 
 	it('should update string state', async () => {
-		/** @type {Stateful} */
-		// @ts-ignore
-		const element = document.createElement('test-stateful')
+
+		const element = new Stateful
 		testContainer.replaceChildren(element)
 		expect(shadowText(element)).to.equal('string: state value: 0')
 
@@ -180,9 +184,8 @@ describe('Stateful component', () => {
 	})
 
 	it('should handle shared state when set as property', async () => {
-		/** @type {Alternating} */
-		// @ts-ignore
-		const element = document.createElement('test-twoway')
+
+		const element = new TwoWayElement
 		testContainer.replaceChildren(element)
 
 		let value = true
