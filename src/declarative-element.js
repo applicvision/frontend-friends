@@ -9,6 +9,7 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
  * @template [SharedState=null]
+ * @abstract
  * @implements {StoreSubscriber}
  **/
 export class DeclarativeElement extends HTMLElement {
@@ -216,18 +217,22 @@ export class DeclarativeElement extends HTMLElement {
 }
 
 class StyleDeclaration {
-	stringValue = ''
+	#stringValue = ''
 
 	/**
 	 * @param {TemplateStringsArray} strings
 	 * @param {(StyleDeclaration|InnerCSS)[]} nestedParts
 	 */
 	constructor(strings, nestedParts) {
-		this.stringValue = strings.reduce((total, stringPart, index) => {
+		this.#stringValue = strings.reduce((total, stringPart, index) => {
 			const nestedPart = nestedParts[index - 1]
-			if (nestedPart instanceof StyleDeclaration || nestedPart instanceof innerCSS) {
-				return total + nestedPart.stringValue + stringPart
+			if (nestedPart instanceof StyleDeclaration) {
+				return total + nestedPart + stringPart
 			}
+			if (nestedPart instanceof InnerCSS) {
+				return total + nestedPart + stringPart
+			}
+
 			throw new Error('Must nest with css-tag, or innerCSS')
 		})
 	}
@@ -238,17 +243,28 @@ class StyleDeclaration {
 	get styleSheet() {
 		if (!this.#stylesheet) {
 			this.#stylesheet = new CSSStyleSheet()
-			this.#stylesheet.replaceSync(this.stringValue)
+			this.#stylesheet.replaceSync(this.toString())
 		}
 		return this.#stylesheet
+	}
+
+	toString() {
+		return this.#stringValue
 	}
 }
 
 class InnerCSS {
 
+	/** @type {string} */
+	#stringValue
+
 	/** @param {string} cssString */
 	constructor(cssString) {
-		this.stringValue = cssString
+		this.#stringValue = cssString
+	}
+
+	toString() {
+		return this.#stringValue
 	}
 }
 

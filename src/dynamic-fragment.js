@@ -245,11 +245,8 @@ export class DynamicFragment {
 		this.#values = values
 	}
 
-	copy() {
-		return new DynamicFragment(this.strings, this.values)
-	}
 
-	getHtmlString(indexPathPrefix = '') {
+	#getHtmlString(indexPathPrefix = '') {
 
 		const { strings, values } = this
 
@@ -304,12 +301,13 @@ export class DynamicFragment {
 				return
 			}
 
+			/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
+			// @ts-ignore
 			const attributeMatch = typeof part == 'string' && part.match(attributeRegex)
 
 			if (attributeMatch) {
-				/** @type {{attribute: string, quotemark: '"'|"'"|'', prefix: string}} */
-				// @ts-ignore
-				const { attribute, quotemark = '', prefix = '' } = attributeMatch.groups
+				const { quotemark = '', prefix = '' } = attributeMatch.groups
+				const attribute = attributeMatch.groups.attribute.toLowerCase()
 
 				let suffix = ''
 				if (quotemark) {
@@ -411,7 +409,7 @@ export class DynamicFragment {
 			if (isArray) {
 				value.forEach((dynamicFragment, arrayIndex) => {
 					if (dynamicFragment instanceof DynamicFragment) {
-						htmlResult += dynamicFragment.getHtmlString(indexPathPrefix + index + '-' + arrayIndex + '-')
+						htmlResult += dynamicFragment.#getHtmlString(indexPathPrefix + index + '-' + arrayIndex + '-')
 						if (arrayIndex < value.length - 1) {
 							htmlResult += `<!-- ${arrayItemSeparatorCommentPrefix}${indexPathPrefix}${index}:${arrayIndex + 1} -->`
 						}
@@ -420,7 +418,7 @@ export class DynamicFragment {
 					}
 				})
 			} else if (value instanceof DynamicFragment) {
-				htmlResult += value.getHtmlString(indexPathPrefix + index + '-')
+				htmlResult += value.#getHtmlString(indexPathPrefix + index + '-')
 			} else if (value instanceof InnerHTML) {
 				htmlResult += value.htmlString
 			} else if (value || value === 0) {
@@ -585,7 +583,7 @@ export class DynamicFragment {
 		this.#nodes = [...container.childNodes]
 		if (!this.#attributeLocators) {
 			// parse the html once to find attributes
-			this.getHtmlString()
+			this.#getHtmlString()
 		}
 
 		const commentIterator = document.createNodeIterator(
@@ -701,7 +699,7 @@ export class DynamicFragment {
 	 * @param {any=} eventHandlerContext
 	 **/
 	mount(container, eventHandlerContext) {
-		const htmlString = this.getHtmlString()
+		const htmlString = this.#getHtmlString()
 		container.innerHTML = htmlString
 		this.hydrate(container, eventHandlerContext)
 	}
@@ -753,7 +751,7 @@ export class DynamicFragment {
 	 */
 	#buildFragment(eventHandlerContext) {
 		const template = document.createElement('template')
-		template.innerHTML = this.getHtmlString()
+		template.innerHTML = this.#getHtmlString()
 
 		this.hydrate(template.content, eventHandlerContext)
 		return template.content
@@ -788,6 +786,19 @@ export class DynamicFragment {
 			node.value = newValue
 		} else {
 			node.setAttribute(attribute, newValue)
+		}
+	}
+
+	/**
+	 * @param {Extract<DynamicNode, {type: 'attribute'}>} dynamicNode
+	 * @param {boolean} newValue
+	 */
+	#updateBooleanAttribute({ attribute, node }, newValue) {
+		// set property instead of updating attribute for native inputs
+		if (node instanceof HTMLInputElement && attribute == 'checked') {
+			node.checked = newValue
+		} else {
+			node.toggleAttribute(attribute, newValue)
 		}
 
 	}
@@ -824,7 +835,7 @@ export class DynamicFragment {
 					break
 				case 'attribute':
 					if (typeof value == 'boolean') {
-						dynamicNode.node.toggleAttribute(dynamicNode.attribute, value)
+						this.#updateBooleanAttribute(dynamicNode, value)
 					} else {
 						this.#updateStringAttribute(index, newValues)
 						updatedAttributes.add(index)
@@ -1134,6 +1145,6 @@ export class DynamicFragment {
 	}
 
 	toString() {
-		return this.getHtmlString()
+		return this.#getHtmlString()
 	}
 }
