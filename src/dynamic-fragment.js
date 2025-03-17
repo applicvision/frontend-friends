@@ -8,6 +8,7 @@ const propertyCommentPrefix = `${commentPrefix}:property:`
 
 const attributePrefix = 'data-reactive'
 
+// TODO: It would be nice if this were added as some kind of extension
 const sharedStateAttributeName = 'ff-share'
 
 /**
@@ -66,7 +67,7 @@ export function html(strings, ...values) {
 
 html.key = (/** @type {string | number} */ key) =>
 	/**
-	  * @param {TemplateStringsArray} strings
+	* @param {TemplateStringsArray} strings
 	* @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
 	*/
 	(strings, ...values) => new DynamicFragment(strings, values).key(key)
@@ -699,8 +700,7 @@ export class DynamicFragment {
 	 * @param {any=} eventHandlerContext
 	 **/
 	mount(container, eventHandlerContext) {
-		const htmlString = this.#getHtmlString()
-		container.innerHTML = htmlString
+		container.innerHTML = this.toString()
 		this.hydrate(container, eventHandlerContext)
 	}
 
@@ -1001,13 +1001,11 @@ export class DynamicFragment {
 			const activeFragment = currentFragments[index]
 			const next = nextArray[index]
 
-			// if (!nextNode) throw new Error('Array content is malformed. Document does not match data source.')
-
 			if (activeFragment.strings == next.strings) {
 				// strings are the same, update values
 				activeFragment.values = next.values
 			} else {
-				// activeFragment.#unmount()
+
 				this.#cacheFragment(activeFragment)
 
 				const cachedFragment = this.#getCached(next)

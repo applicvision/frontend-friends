@@ -153,7 +153,7 @@ export class DeclarativeElement extends HTMLElement {
 	}
 
 	/**
-	 * @template {Object<string, any>} T
+	 * @template {object} T
 	 * @param {T} object
 	 * @param {(keypath: (string|symbol)[]) => void} effect
 	 * @returns {T}
