@@ -54,7 +54,7 @@ Then, add a script tag pointing to your application:
 
 ```html
 <script type="module" src="main.js"></script>
-````
+```
 
 And that's it! Now serve your files any way you like, and start building your web application, using modern technologies without any intermediate build tool.
 

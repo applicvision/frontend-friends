@@ -147,7 +147,7 @@ export class PropertySetter {
 }
 
 /** 
- * @template {{[key: string]: any}} T 
+ * @template {object} T 
  * @implements {TwowayBinding}
  **/
 class Twoway {
@@ -177,10 +177,9 @@ class Twoway {
 }
 
 /**
- * @template {{[key: string]: any}} T
+ * @template {object} T
  * @param {T} state
  * @param {keyof state} property
- * @return {TwowayBinding}
  */
 export function twoway(state, property) {
 	return new Twoway(state, property)
