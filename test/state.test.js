@@ -9,7 +9,14 @@ import { island } from '../src/dynamic-island.js'
  * @param {HTMLElement} element
  */
 function shadowText(element) {
-	return element.shadowRoot?.textContent ?? ''
+	return normalizeMarkupText(element.shadowRoot?.textContent ?? '')
+}
+
+/**
+ * @param {string} text
+ */
+function normalizeMarkupText(text) {
+	return text.replaceAll(/\s+/g, ' ').trim()
 }
 
 /**
@@ -73,7 +80,7 @@ describe('Stateful component', () => {
 		render() {
 			return html`<button
 				onclick=${() => this.sharedState = !this.sharedState}
-				> inside: ${this.sharedState ? 'active' : 'inactive'}</button>`
+				>inside: ${this.sharedState ? 'active' : 'inactive'}</button>`
 		}
 	}
 
@@ -151,7 +158,7 @@ describe('Stateful component', () => {
 		const anIsland = island(
 			() => ({ state: { active: false } }),
 			({ state }) => html`
-			<button onclick=${() => state.active = !state.active}>outside: ${String(state.active)}</button>
+				<button onclick=${() => state.active = !state.active}>outside: ${String(state.active)}</button>
 				<test-twoway ff-share=${twoway(state, 'active')}></test-twoway>
 			`
 		)
@@ -162,7 +169,7 @@ describe('Stateful component', () => {
 		// @ts-ignore
 		const twowayElement = testContainer.querySelector('test-twoway')
 
-		const getText = () => testContainer.innerText + shadowText(twowayElement)
+		const getText = () => normalizeMarkupText(testContainer.textContent + shadowText(twowayElement))
 
 		expect(getText()).to.equal('outside: false inside: inactive')
 
@@ -204,7 +211,7 @@ describe('Stateful component', () => {
 
 		await element.pendingUpdate
 
-		expect(shadowText(element)).to.equal(' inside: active')
+		expect(shadowText(element)).to.equal('inside: active')
 
 		expect(element.matches(':state(active)')).to.be.true()
 
@@ -214,7 +221,7 @@ describe('Stateful component', () => {
 		expect(value).to.be.false()
 		await element.pendingUpdate
 
-		expect(shadowText(element)).to.equal(' inside: inactive')
+		expect(shadowText(element)).to.equal('inside: inactive')
 		expect(element.matches(':state(active)')).to.be.false()
 	})
 
