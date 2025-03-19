@@ -5,7 +5,7 @@ The main module exports the most commonly used functionality from the other expo
 - [DeclarativeElement](#declarativeelement)
 - [html](#htmlstrings-string-values--dynamicfragment)
 - [css](#cssstrings-string-values)
-- island
+- [island](#island)
 
 ## `@applicvision/frontend-friends/declarative-element`
 
@@ -55,7 +55,7 @@ Adds stylesheet(s) to your component's shadow DOM.
 
 ##### `static sharedStateName: string?`
 
-Setting this to a valid string identifier will add it to the element's [custom state set](https://developer.mozilla.org/en-US/docs/Web/API/ElementInternals/states) when the [shared state](TODO: insert link to ff-share) is truthy.
+Setting this to a valid string identifier will add it to the element's [custom state set](https://developer.mozilla.org/en-US/docs/Web/API/ElementInternals/states) when the [shared state](#protected-get-sharedstate) is truthy.
 
 ##### `static observedAttributes: string[]`
 
@@ -65,7 +65,7 @@ Add the names of the attributes to which changes should trigger an re-render of 
 
 ##### `set sharedStateBinding: TwoWayBinding`
 
-Set this property to a binding object to make the element's state two-way bound. If you want to use a [reactive](TODO:LINK) object as a shared state, the [`twoway`](TODO:link) function can be used here. But any object conforming to [`TwoWayBinding`](TODO:LINK) can be used.
+Set this property to a binding object to make the element's state two-way bound. If you want to use a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](TODO:link) function can be used here. But any object conforming to [`TwoWayBinding`](TODO:LINK) can be used. See [ff-share](TODO:link) for more information how to conveniently use shared state in a `DynamicFragment`.
 
 ##### `protected get sharedState`
 
@@ -88,7 +88,7 @@ Implement the render function to visually represent the state of your component.
 
 > Note: Do not manually call the render function. It will be called by the rendering logic when needed.
 
-Example:
+*Example:*
 ```javascript
 render() {
     return html`<div>hello</div>`
@@ -97,12 +97,13 @@ render() {
 
 ##### `invalidate()` `=>` `Promise`
 
-Call invalidate to request an asynchronous re-render of the component. The function returns a promise which resolves when the component has been updated.
+Requests an asynchronous re-render of the component. A promise is returned, which resolves when the component has been updated.
 
 ##### `forwardSharedState()` `=>` [`TwoWayBinding`](TODO:link)
 
-This function can be called in the render function to pass on the shared state to an inner element.
-Example:
+Passes on the shared state to an inner element. This can be used in the render function.
+
+*Example:*
 ```javascript
 class MyCoolInput extends DeclarativeElement {
     render() {
@@ -122,7 +123,7 @@ This function can be overriden by your component class, if you want to customize
 
 Call `reactive` to convert an initial state object to a deep reactive object. Any subsequent mutation to the object will trigger the effect function. The default effect function simply triggers an update using [`invalidate()`](#invalidate--promise). To create reactivity, a JavaScript Proxy is used. The deep watch functionality is also available on its own, deepWatch.
 
-**Example:**
+*Example:*
 ```javascript
 class StatefulComponent extends DeclarativeElement {
     state = this.reactive({
@@ -143,9 +144,9 @@ class StatefulComponent extends DeclarativeElement {
 
 Tag function for adding CSS to your component. The function returns an instance of `StyleDeclaration` which can be assigned to the component's [style](#static-style-styledeclarationstyledeclaration). The CSS will be added to the `adoptedStyleSheets` property of the shadow root. Thus, it will be isolated from 'outside' CSS. The tag function supports nesting of ``` css`` ```-expressions as in the following example.
 
-Example:
+*Example:*
 ```javascript
-class StyledComponent extends DeclaratitveElement {
+class StyledComponent extends DeclarativeElement {
     static style = css`
     button {
         background: yellow;
@@ -161,12 +162,12 @@ class StyledComponent extends DeclaratitveElement {
 
 ### `innerCSS(value: string)`
 
-Use this function to add a variable CSS string to a style declaration.
+Adds a variable CSS string to a style declaration.
 
 > [!IMPORTANT]
 > Note: Beware of CSS injection. Make sure you know the content of the string as it will be directly inserted into the stylesheet.
 
-Example:
+*Example:*
 ```javascript
 const commonBackground = innerCSS('background: yellow;')
 const style = css`
@@ -175,6 +176,138 @@ button {
 }
 `
 ```
+
+## `@applicvision/frontend-friends/island`
+
+This is the module when working with pieces of dynamic content or interactivity, so-called interactive islands. This module can also be used in a NodeJS environment for server-side rendering.
+
+Note that this is not the place to go for making a component based architecture. For that you would use [DeclarativeElement](#applicvisionfrontend-friendsdeclarative-element).
+
+The module exports a factory function for creating islands and the underlying class.
+
+* [island](#island)
+* [DynamicIsland](#dynamicisland)
+
+
+### `island()`
+
+Factory function to create islands. It can be used in two ways.
+
+#### Island without reactive state
+
+Firstly, you can pass it just one argument, a render function. In this case the island will not have any reactive state, and updates need to be triggered manually with [`.invalidate()`](#invalidate--promise-1).
+
+The signature of this function is:
+```typescript
+island(renderFunction: () => DynamicFragment): DynamicIsland<{}>
+```
+
+*Example:*
+```javascript
+const externalState = { value: 'hello' }
+
+const myIsland = island(
+    () => html`<div>${externalState.value}</div>`
+)
+
+// a later state change
+externalState.value = 'goodbye'
+
+// trigger update
+myIsland.invalidate()
+```
+
+
+#### Island with reactive state
+
+The other way to use the `island` function is to pass it two arguments; a setup function and a render function.
+
+The function signature for that is:
+
+```typescript
+island<T extends { state?: object }>(
+    setup: () => T,
+    renderFunction: (islandContext: T) => DynamicFragment
+): DynamicIsland<T>
+```
+
+The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If that object includes an object on the key `state`, that object will be made reactive using [`deepWatch()`](#todo:link). That state will later be accessible and mutable as a property of the island.
+>[!Note]
+> The reason for the extra nesting of the `state` object is that in the future there might be additions to the context object.
+
+The second argument is the render function, which will be called every time a rendering is needed. When using islands with a setup function, the render function gets called with the context object as the only argument.
+
+*Example:*
+```javascript
+const helloIsland = island(
+    // Setup (called initially)
+    () => ({state: {name: 'unknown'}}),
+
+    // Render (called on every state change)
+    ({ state }) => html`<h1>Hello ${state.name}</h1>`
+)
+
+helloIsland.mount(document.body)
+
+// Changing state triggers 
+helloIsland.state.name = 'World'
+```
+
+
+### `DynamicIsland`
+
+```javascript
+class DynamicIsland extends EventTarget
+```
+
+Underlying class for islands. It is similar to `DeclarativeElement` in the sense that it manages its own rendering.
+
+#### Constructor
+
+The recommended way to create instances of `DynamicIsland` is to use the [island](#island) function.
+
+##### instance properties
+
+#####  `pendingUpdate: Promise|null`
+
+If an updating is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
+
+###### `get state`
+
+This is the current reactive state of the island. Changes to the state will cause the island to update.
+
+*Example:*
+```javascript
+const anIsland = island(
+	() => ({ state: { value: 1 } }),
+
+	({ state }) => html`${state.value}`
+)
+
+setInterval(() => anIsland.state.value++, 1000)
+```
+
+###### `get hydratable`
+
+Returns a string representation of the island for server-side rendering. Similar to `.mount`, this will call the setup- and render function, but it will not setup reactivity.
+
+##### instance methods
+
+##### `hydrate(container: HTMLElement)`
+
+If `.hydratable` has been used on the server to send HTML to the client, `.hydrate` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-any) for more details.
+
+##### `mount(container: HTMLElement)`
+
+Mounts the island in the given container. This method will call your setup and render functions respectively to collect information about the initial content of the island.
+
+##### `unmount(cacheFragment: boolean)`
+
+Unmounts the island, and optionally caches the current fragment in memory for later reuse. By default, the fragment cache is cleared on unmount.
+
+##### `invalidate()` `=>` `Promise`
+
+Requests an asynchronous re-render of the island. A promise is returned, which resolves when the island has been updated.
 
 ## `@applicvision/frontend-friends/dynamic-fragment`
 
@@ -193,7 +326,7 @@ This is the fundamental function to create dynamic HTML content.
 
 Pass valid HTML to the tag function, as the string will later be passed to the [innerHTML](https://developer.mozilla.org/en-US/docs/Web/API/Element/innerHTML) setter of the mount point.
 
-Example:
+*Example:*
 ```javascript
 html`<div>hello</div>`.mount(document.body)
 ```
@@ -230,7 +363,7 @@ The type of the expression decides whether the attribute is treated as an ordina
 
 The expressions can also be event handlers. The attributes for event handlers should start with 'on' followed by the event name.
 
-#### *Event Handler*
+#### *Event Handlers*
 
 ```javascript
 html`<button onclick=${(event) => console.log('click', event)}>Click me!</button>`
@@ -324,7 +457,8 @@ Restores the fragment in given container. This can be used on fragments that hav
 ##### `key(key: string|number)`
 
 Sets a key as identifier for the fragment. This can be used for more effectively updating array content, but is not required.
-Example:
+
+*Example:*
 ```javascript
 const animals = [{id: 1, name: 'dog'}, {id: 2, name: 'cat'}, {id: 3, name: 'horse'}]
 

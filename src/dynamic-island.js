@@ -9,14 +9,14 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
  */
 
 /**
- * @template {{[key: string]: any, state?: {[key: string]: any}}} T
+ * @template {{[key: string]: any, state?: object}} T
  * @implements {AutoSubscriber}
  * @implements {RouteSubscriber}
  **/
 export class DynamicIsland extends EventTarget {
 
 	/** @type {HTMLElement?} */
-	container = null
+	#container = null
 
 	/** @type {Omit<T, "state">?} */
 	#renderProps = null
@@ -93,7 +93,7 @@ export class DynamicIsland extends EventTarget {
 
 		this.#reactiveSetup()
 
-		this.container = container
+		this.#container = container
 		if (this.#currentFragment) {
 			/** @type {T} */
 			// @ts-ignore
@@ -105,7 +105,7 @@ export class DynamicIsland extends EventTarget {
 			this.#internalRender()
 			// console.timeEnd('initial render')
 		}
-		this.dispatchEvent(new Event('mounted'))
+		this.dispatchEvent(new Event('mount'))
 	}
 
 	/**
@@ -122,16 +122,22 @@ export class DynamicIsland extends EventTarget {
 		const dynamicFragment = this.#render(renderArg)
 		dynamicFragment.hydrate(container)
 		this.#currentFragment = dynamicFragment
-		this.container = container
+		this.#container = container
 	}
 
 	get hydratable() {
 		return this.#render(this.#setup()).toString()
 	}
 
-	unmout() {
-		// remove and cache, in case we would need it again
-		this.#cacheIsland()
+	/**
+	 * @param {boolean} cacheFragment
+	 */
+	unmount(cacheFragment) {
+		if (cacheFragment) {
+			this.#cacheIsland()
+		} else {
+			this.#fragmentCache.clear()
+		}
 
 		// remove subscriptions
 		this.subscriptions.forEach(store => store.unsubscribeAll(this))
@@ -139,11 +145,14 @@ export class DynamicIsland extends EventTarget {
 		this.subscriptions.clear()
 		this.routeSubscription = null
 
-		this.container = null
+		if (this.#container) {
+			this.#container.innerHTML = ''
+			this.#container = null
+		}
 	}
 
 	#cacheIsland() {
-		if (!(this.container && this.#currentFragment)) return
+		if (!(this.#container && this.#currentFragment)) return
 
 		this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 	}
@@ -152,16 +161,16 @@ export class DynamicIsland extends EventTarget {
 	 * @param {DynamicFragment} dynamicFragment
 	 */
 	#restoreFromCache(dynamicFragment) {
-		if (!this.container) return
+		if (!this.#container) return
 
 		const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
 
 		if (reusableFragment) {
-			reusableFragment.restoreIn(this.container)
+			reusableFragment.restoreIn(this.#container)
 			this.#currentFragment = reusableFragment
 			this.#currentFragment.values = dynamicFragment.values
 		} else {
-			dynamicFragment.mount(this.container)
+			dynamicFragment.mount(this.#container)
 			this.#currentFragment = dynamicFragment
 		}
 	}
@@ -172,7 +181,7 @@ export class DynamicIsland extends EventTarget {
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
 	#internalRender() {
-		if (!this.container) return
+		if (!this.#container) return
 
 		/** @type {T} */
 		// @ts-ignore
@@ -180,7 +189,7 @@ export class DynamicIsland extends EventTarget {
 
 		const dynamicFragment = this.#render(renderArg)
 		if (!this.#currentFragment) {
-			dynamicFragment.mount(this.container)
+			dynamicFragment.mount(this.#container)
 			this.#currentFragment = dynamicFragment
 			return
 		}
@@ -198,22 +207,22 @@ export class DynamicIsland extends EventTarget {
 
 /**
  * @overload
- * @param {() => ReturnType<html>} renderFunction
+ * @param {() => DynamicFragment} renderFunction
  * @returns {DynamicIsland<{}>}
  */
 
 /**
- * @template {{[key: string]: any, state?: {[key: string]: any}}} T
+ * @template {{state?: object}} T
  * @overload
  * @param {() => T} setup
- * @param {(state: T) => ReturnType<html>} renderFunction
+ * @param {(state: T) => DynamicFragment} renderFunction
  * @returns {DynamicIsland<T>}
 */
 
 /**
- * @template {{[key: string]: any, state?: {[key: string]: any}}} T
- * @param {() => ReturnType<html> | (() => T)} setupOrRender
- * @param {(state: T) => ReturnType<typeof html>} [renderFunction]
+ * @template {{state?: object}} T
+ * @param {() => DynamicFragment | (() => T)} setupOrRender
+ * @param {(state: T) => DynamicFragment} [renderFunction]
  */
 export function island(setupOrRender, renderFunction) {
 	if (renderFunction) {
