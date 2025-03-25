@@ -295,7 +295,7 @@ Returns a string representation of the island for server-side rendering. Similar
 
 ##### `hydrate(container: HTMLElement)`
 
-If `.hydratable` has been used on the server to send HTML to the client, `.hydrate` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-any) for more details.
+If `.hydratable` has been used on the server to send HTML to the client, `.hydrate` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
 
 ##### `mount(container: HTMLElement)`
 
@@ -316,9 +316,9 @@ This is the module for creating dynamic pieces of HTML. It is used in both [Decl
 - [html](#html--dynamicfragment)
 - [DynamicFragment](#dynamicfragment) 
 - [twoway](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
-- innerHTML
-- PropertySetter
-- TwowayBinding
+- [innerHTML](#innerhtml)
+- [PropertySetter](#propertysetter)
+- [TwowayBinding](#twowaybinding)
 
 ### `html(strings: string[], ...values)` `=>` [`DynamicFragment`](#dynamicfragment)
 
@@ -394,7 +394,7 @@ html`<section>${ html`<h2>${'Hello'}</h2>` }</section>`
 // Will create a header with text 'Hello'
 ```
 
-If for some reason, more dynamic HTML is needed, there is more info in the [innerHTML](#todo) section.
+If for some reason, more dynamic HTML is needed, there is more info in the [innerHTML](#innerhtml) section.
 
 In case the value of the expression is `null`, `false` or `undefined` nothing will be output.
 
@@ -421,9 +421,9 @@ html`
 
 In addition to these types of expressions, there are some specials. More info on their respective section:
 
-* ff-share (two-way binding)
-* PropertySetter
-* InnerHTML
+* [ff-share](#twowaybinding) (two-way binding)
+* [PropertySetter](#propertysetter)
+* [InnerHTML](#innerhtml)
 * [keyed Array items](#keykey-stringnumber)
 
 ### `html.key(key: string|number) => (strings: string[], ...values)` `=>` [`DynamicFragment`](#dynamicfragment)
@@ -488,6 +488,88 @@ type TwowayBinding<T> = {
 }
 ```
 
+
+### `innerHTML`
+
+Adds a raw HTML string to the fragment.
+
+*Example:*
+```javascript
+const htmlString = '<h1>Hello header</h1><p>Hello first paragraph</p>'
+
+html`<section>${innerHTML(htmlString)}</section>`
+```
+
+> [!Important]
+> Beware of XSS vulnerability! Inserting unknown HTML is a security risk. Make sure you know the content of the string as it will be directly inserted into the HTML document.
+
+
+### `PropertySetter`
+
+Simple class which is used to set properties on elements in a `DynamicFragment`, when attributes do not exist or are not suitable. This could be when passing a function or a JavaScript object.
+
+Imagine we have a custom element which has a property which is an object.
+
+```typescript
+class PersonInfo extends DeclarativeElement {
+	#info?: {name: string, age: number}
+
+    get info() { return this.#info }
+    
+    // Custom setter to trigger update when the property is set
+    set info(info) {
+        this.#info = info
+        this.invalidate()
+    }
+}
+customElements.define('person-info', PersonInfo)
+```
+
+Attributes in HTML are strings (or booleans), so to pass an object to a person-info element we need to use the property of the element instance.
+
+```javascript
+personInfo.info = { name: 'Alice', age: 20 }
+```
+
+>[!Info]
+> In this case we could get away with atrributes using `JSON.stringify()` and `JSON.parse()` in the component, but imagine we wanted to set a function as a property instead.
+
+The way that is achieved in `DynamicFragment` is by creating an instance of PropertySetter and pass that as a 'child' to the element.
+
+```javascript
+html`<person-info>${
+    new PropertySetter('info', {name: 'Alice', age: 20})
+}</person-info>`
+```
+
+To make this a little more convenient, a helper function can be written by the component author:
+
+```typescript
+export function info(personInfo: {name: string, age: number}) {
+    return new PropertySetter('info', personInfo)
+}
+```
+
+Which would then result in the following template:
+
+```javascript
+html`<person-info>${info({name: 'Alice', age: 20})}</person-info>`
+```
+
+Multiple properties can be passed as children, also alongside other content. Here is an example with slotted content and a so called render property.
+
+```javascript
+html`
+<person-info>
+    <div>I'm in the slot</div>
+    ${info({name, age})}
+    ${renderName(name => html`<h1>${name}</h1>`)}
+</person-info>
+`
+```
+
+`DynamicFragment` will only set properties which have been declared in the class. If trying to attach an arbitrary property to an element nothing will be set.
+
 ### `DynamicFragment`
 
 Class which manages portions of HTML which dynamic parts such as attributes and text content. This is the low level implementation of the Frontend Friends suite. Although perfectly possible, there is usually no need to manually manage instances of `DynamicFragment`. Instead use it through `DeclarativeElement` or islands.
@@ -507,7 +589,7 @@ The `values` array represents the current dynamic pieces in the tagged template,
 
 #### Instance methods
 
-##### `mount(container: HTMLElement|ShadowRoot, eventHandlerContext?: any)`
+##### `mount(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
 
 Mounts the fragment in the given container. If not already generated, this method creates the HTML content and attaches event listeners. If an event handler context is passed to mount, that will be the value of `this` inside any event handler.
 
@@ -540,11 +622,11 @@ html`<ul>
 
 ##### `toString()`
 
-Puts together the HTML string from the tagged template. This can be used on the server to send initial HTML to the client. The HTML content is ready for rendering but contains some special attributes and comments which are removed during the [hydration](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-any) step.
+Puts together the HTML string from the tagged template. This can be used on the server to send initial HTML to the client. The HTML content is ready for rendering but contains some special attributes and comments which are removed during the [hydration](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) step.
 
-##### `hydrate(container: HTMLElement|ShadowRoot, eventHandlerContext?: any)`
+##### `hydrate(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
 
-Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-any), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString` and `.hydrate()`:
+Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-unknown), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString` and `.hydrate()`:
 
 ```javascript
 mount(container, eventHandlerContext) {
@@ -552,3 +634,23 @@ mount(container, eventHandlerContext) {
     this.hydrate(container, eventHandlerContext)
 }
 ```
+
+
+## `@applicvision/frontend-friends/deep-watch`
+
+Utility module for wathching objects for changes. Used internally to create reactivity in [islands](#island) and [`DeclarativeElement`](#declarativeelement).
+
+It uses [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy) in order to detect changes to an initial state object. For that reason, if changes are made to the initial object passed in, no effect will be triggered.
+
+The module exports two functions:
+
+* [deepWatch](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void--t)
+* effect
+
+### `deepWatch<T extends object>(target: T, modificationCallback: (keypath: string[]) => void)` `=>` `T`
+
+Pass in a target object to get a deep copy back which will be watched for changes. For every change to the returned object, the `modificationCallback` will be called synchronously with the keypath of the changed property as argument.
+
+## `@applicvision/frontend-friends/attribute-helpers`
+
+helpers

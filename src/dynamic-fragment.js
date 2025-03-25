@@ -233,7 +233,7 @@ export class DynamicFragment {
 	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} */
 	#values
 
-	/** @type {any} */
+	/** @type {unknown} */
 	#eventHandlerContext
 
 	/**
@@ -437,7 +437,7 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @param {any} eventHandlerContext
+	 * @param {unknown} eventHandlerContext
 	 */
 	#connectAttributes(eventHandlerContext) {
 
@@ -577,7 +577,7 @@ export class DynamicFragment {
 
 	/**
 	 * @param {Element|DocumentFragment|ShadowRoot} container
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 */
 	hydrate(container, eventHandlerContext) {
 		this.#nodes = [...container.childNodes]
@@ -696,7 +696,7 @@ export class DynamicFragment {
 
 	/**
 	 * @param {HTMLElement|ShadowRoot} container 
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 **/
 	mount(container, eventHandlerContext) {
 		container.innerHTML = this.toString()
@@ -746,7 +746,7 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 */
 	#buildFragment(eventHandlerContext) {
 		const template = document.createElement('template')
