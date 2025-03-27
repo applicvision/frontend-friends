@@ -2,18 +2,18 @@
 
 The main module exports the most commonly used functionality from the other exported modules.
 
-- [DeclarativeElement](#declarativeelement)
-- [html](#htmlstrings-string-values--dynamicfragment)
-- [css](#cssstrings-string-values)
-- [island](#island)
+- [`DeclarativeElement`](#declarativeelement)
+- [`html`](#htmlstrings-string-values--dynamicfragment)
+- [`css`](#cssstrings-string-values)
+- [`island`](#island)
 
 ## `@applicvision/frontend-friends/declarative-element`
 
 This is the module for working with custom elements. It exports the following:
 
-- [DeclarativeElement](#declarativeelement)
-- [css](#cssstrings-string-values)
-- [innerCSS](#innercssvalue-string)
+- [`DeclarativeElement`](#declarativeelement)
+- [`css`](#cssstrings-string-values)
+- [`innerCSS`](#innercssvalue-string)
 
 ### `DeclarativeElement`
 
@@ -59,7 +59,7 @@ Setting this to a valid string identifier will add it to the element's [custom s
 
 ##### `static observedAttributes: string[]`
 
-Add the names of the attributes to which changes should trigger an re-render of the component.
+Add the names of the attributes to which changes should trigger a re-rendering of the component. This property is inherited from `HTMLELement`. More info [here](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#responding_to_attribute_changes).
 
 #### Instance properties
 
@@ -164,7 +164,7 @@ class StyledComponent extends DeclarativeElement {
 
 Adds a variable CSS string to a style declaration.
 
-> [!IMPORTANT]
+> [!CAUTION]
 > Note: Beware of CSS injection. Make sure you know the content of the string as it will be directly inserted into the stylesheet.
 
 *Example:*
@@ -231,8 +231,9 @@ island<T extends { state?: object }>(
 ): DynamicIsland<T>
 ```
 
-The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If that object includes an object on the key `state`, that object will be made reactive using [`deepWatch()`](#todo:link). That state will later be accessible and mutable as a property of the island.
->[!Note]
+The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If that object includes an object on the key `state`, that object will be made reactive using [`deepWatch()`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t). That state will later be accessible and mutable as a property of the island.
+
+> [!Note]
 > The reason for the extra nesting of the `state` object is that in the future there might be additions to the context object.
 
 The second argument is the render function, which will be called every time a rendering is needed. When using islands with a setup function, the render function gets called with the context object as the only argument.
@@ -500,7 +501,7 @@ const htmlString = '<h1>Hello header</h1><p>Hello first paragraph</p>'
 html`<section>${innerHTML(htmlString)}</section>`
 ```
 
-> [!Important]
+> [!CAUTION]
 > Beware of XSS vulnerability! Inserting unknown HTML is a security risk. Make sure you know the content of the string as it will be directly inserted into the HTML document.
 
 
@@ -531,7 +532,7 @@ Attributes in HTML are strings (or booleans), so to pass an object to a person-i
 personInfo.info = { name: 'Alice', age: 20 }
 ```
 
->[!Info]
+> [!Note]
 > In this case we could get away with atrributes using `JSON.stringify()` and `JSON.parse()` in the component, but imagine we wanted to set a function as a property instead.
 
 The way that is achieved in `DynamicFragment` is by creating an instance of PropertySetter and pass that as a 'child' to the element.
@@ -572,7 +573,7 @@ html`
 
 ### `DynamicFragment`
 
-Class which manages portions of HTML which dynamic parts such as attributes and text content. This is the low level implementation of the Frontend Friends suite. Although perfectly possible, there is usually no need to manually manage instances of `DynamicFragment`. Instead use it through `DeclarativeElement` or islands.
+Class which manages portions of HTML with dynamic parts such as attributes and text content. This is the low level implementation of the Frontend Friends suite. Although perfectly possible, there is usually no need to manually manage instances of `DynamicFragment`. Instead use it through `DeclarativeElement` or islands.
 
 #### Constructor
 
@@ -598,9 +599,9 @@ Mounts the fragment in the given container. If not already generated, this metho
 Restores the fragment in given container. This can be used on fragments that have been unmounted. It is used by `DeclarativeElement` and `island` to reuse cached fragments.
 
 
-##### `key(key: string|number)`
+##### `key(key: string|number): this`
 
-Sets a key as identifier for the fragment. This can be used for more effectively updating array content, but is not required.
+Sets a key as identifier for the fragment, and returns the fragment. This can be used for more effectively updating array content, but is not required.
 
 *Example:*
 ```javascript
@@ -647,10 +648,32 @@ The module exports two functions:
 * [deepWatch](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void--t)
 * effect
 
-### `deepWatch<T extends object>(target: T, modificationCallback: (keypath: string[]) => void)` `=>` `T`
+### `deepWatch<T extends object>(target: T, modificationCallback: (keypath: string[]) => void): T`
 
 Pass in a target object to get a deep copy back which will be watched for changes. For every change to the returned object, the `modificationCallback` will be called synchronously with the keypath of the changed property as argument.
 
+Example:
+```javascript
+const watched = deepWatch(
+    {outer: { inner: 'Hello' }},
+    (keyPath) => console.log(keyPath)
+)
+watched.outer.inner = 'World'
+// Will log ['outer', 'inner']
+```
+
+### `effect<T extends object>(target: T, effect: (target: T) => void): T`
+
+Similar to [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t), but calls the effect handler asynchronously on changes to the watched object. This is the logic used by `island` and `DeclarativeElement` for re-rendering.
+
+This function is useful to aggregate several changes into one effect. For example, array manipulations such as prepending or removing the first element cause a lot of changes to the underlying object (keys are shifted for every item), so then it is a good idea to aggregate those changes into one callback.
+
+Example:
+```javascript
+const watchedArray = effect([1, 2, 3], (array) => console.log(array))
+watchedArray.unshift(0)
+// will eventually log [0, 1, 2, 3]
+```
+
 ## `@applicvision/frontend-friends/attribute-helpers`
 
-helpers
