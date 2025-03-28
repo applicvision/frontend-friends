@@ -185,8 +185,8 @@ Note that this is not the place to go for making a component based architecture.
 
 The module exports a factory function for creating islands and the underlying class.
 
-* [island](#island)
-* [DynamicIsland](#dynamicisland)
+* [`island`](#island)
+* [`DynamicIsland`](#dynamicisland)
 
 
 ### `island()`
@@ -267,13 +267,13 @@ Underlying class for islands. It is similar to `DeclarativeElement` in the sense
 
 The recommended way to create instances of `DynamicIsland` is to use the [island](#island) function.
 
-##### instance properties
+#### instance properties
 
 #####  `pendingUpdate: Promise|null`
 
 If an updating is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
 
-###### `get state`
+##### `get state`
 
 This is the current reactive state of the island. Changes to the state will cause the island to update.
 
@@ -288,11 +288,11 @@ const anIsland = island(
 setInterval(() => anIsland.state.value++, 1000)
 ```
 
-###### `get hydratable`
+##### `get hydratable`
 
 Returns a string representation of the island for server-side rendering. Similar to `.mount`, this will call the setup- and render function, but it will not setup reactivity.
 
-##### instance methods
+#### instance methods
 
 ##### `hydrate(container: HTMLElement)`
 
@@ -314,12 +314,12 @@ Requests an asynchronous re-render of the island. A promise is returned, which r
 
 This is the module for creating dynamic pieces of HTML. It is used in both [DeclarativeElement](#declarativeelement) and islands. It exports the following:
 
-- [html](#html--dynamicfragment)
-- [DynamicFragment](#dynamicfragment) 
-- [twoway](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
-- [innerHTML](#innerhtml)
-- [PropertySetter](#propertysetter)
-- [TwowayBinding](#twowaybinding)
+- [`html`](#html--dynamicfragment)
+- [`DynamicFragment`](#dynamicfragment) 
+- [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
+- [`innerHTML`](#innerhtml)
+- [`PropertySetter`](#propertysetter)
+- [`TwowayBinding`](#twowaybinding)
 
 ### `html(strings: string[], ...values)` `=>` [`DynamicFragment`](#dynamicfragment)
 
@@ -349,7 +349,7 @@ html`<div class="base ${introClass}">welcome</div>`
 html`<div class="${anotherClass} ${introClass} footer">Goodbye</div>`
 ```
 
-For more complex attribute compositions, the [tokens](TODO:link) helper can be used.
+For more complex attribute compositions, the [`tokens`](#tokensdefinitionparts-object--string--object--string-string) helper can be used.
 
 #### *Boolean attributes*
 ```javascript
@@ -645,8 +645,8 @@ It uses [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Referenc
 
 The module exports two functions:
 
-* [deepWatch](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void--t)
-* effect
+* [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void--t)
+* [`effect`](#effectt-extends-objecttarget-t-effect-target-t--void-t)
 
 ### `deepWatch<T extends object>(target: T, modificationCallback: (keypath: string[]) => void): T`
 
@@ -664,7 +664,7 @@ watched.outer.inner = 'World'
 
 ### `effect<T extends object>(target: T, effect: (target: T) => void): T`
 
-Similar to [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t), but calls the effect handler asynchronously on changes to the watched object. This is the logic used by `island` and `DeclarativeElement` for re-rendering.
+Similar to [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t), but calls the effect callback function asynchronously on changes to the watched object. This is the logic used by `island` and `DeclarativeElement` for re-rendering.
 
 This function is useful to aggregate several changes into one effect. For example, array manipulations such as prepending or removing the first element cause a lot of changes to the underlying object (keys are shifted for every item), so then it is a good idea to aggregate those changes into one callback.
 
@@ -677,3 +677,24 @@ watchedArray.unshift(0)
 
 ## `@applicvision/frontend-friends/attribute-helpers`
 
+Utility module to work with attributes. It exports one function:
+
+* [`tokens`](#tokensdefinitionparts-object--string--object--string-string)
+
+### `tokens(...definitionParts: (object | string | (object | string)[])[]): string`
+
+Pass an arbitrary number of arguments consisting of strings, objects or arrays of strings or objects. The arguments passed will be 'flattened' to one space separated string of unique tokens which can be passed to attributes expecting space separated values, such as `class`.
+
+Object arguments will have their keys passed to the resulting string if their values are truthy.
+
+Example:
+```javascript
+const isActive = false
+const loading = true
+const classes = tokens('base', { active: isActive, loading })
+// classes => 'base loading'
+html`<button class=${classes}>...</button>`
+
+const classes2 = tokens('alfa beta', [{ 'gamma': true }], 'beta ', { 'beta alfa': true })
+// classes2 => 'alfa beta gamma'
+```
