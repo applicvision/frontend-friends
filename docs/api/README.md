@@ -47,15 +47,15 @@ Or in JavaScript:
 
 #### Static properties
 
-You can set these static properties on the subclass in order to customize common appearance and behaviour of all instances.
+You can set these static properties on the subclass in order to customize appearance and behaviour common to all instances of the element.
 
 ##### `static observedAttributes: string[]`
 
-Add the names of the attributes to which changes should trigger a re-rendering of the component. This property is inherited from `HTMLELement`. More info [here](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#responding_to_attribute_changes).
+Add the names of the attributes to which changes should trigger a re-rendering of the component. This property is inherited from `HTMLElement`. More info [here](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#responding_to_attribute_changes).
 
 ##### `static style: StyleDeclaration|StyleDeclaration[]`
 
-Adds stylesheet(s) to your component's shadow DOM.
+Adds stylesheet(s) to your component's shadow DOM. See [`css`](#cssstrings-string-values) for more info and example.
 
 ##### `static sharedStateName: string?`
 
@@ -66,7 +66,7 @@ Setting this to a valid string identifier will add it to the element's [custom s
 
 #####  `pendingUpdate: Promise|null`
 
-If an updating is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
+If an update is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
 
 
 ##### `protected get sharedState`
@@ -81,7 +81,9 @@ Update the shared state. This will call the `set` function of the `sharedStateBi
 
 ##### `set sharedStateBinding:` [`TwoWayBinding`](#twowaybinding)
 
-Set this property to a binding object to make the element's state two-way bound. If you want to use a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. Check the example in the [`twoway`] section(#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) to see how to conveniently use shared state in a `DynamicFragment`.
+Set this property to a binding object to make the element's state two-way bound. If you want to use a property of a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. 
+
+Please check the example in the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) section to see how to conveniently use shared state in a `DynamicFragment`.
 
 
 #### Instance methods
@@ -109,7 +111,7 @@ Requests an asynchronous re-rendering of the component. A promise is returned, w
 
 ##### `reactive<T extends object>(object: T, effect?: (keypath: string[]) => void)` `=>` `T`
 
-Call `reactive` to convert an initial state object to a deep reactive object. Any subsequent mutation to the object will trigger the effect function. The default effect function simply triggers an update using [`invalidate()`](#invalidate--promise). To create reactivity, a JavaScript Proxy is used. The deep watch functionality is also available on its own, deepWatch.
+Call `reactive` to convert an initial state object to a deep reactive object. Any subsequent mutation to the object will trigger the effect function. The default effect function simply triggers an update using [`invalidate()`](#invalidate--promise). To monitor objects for changes, a JavaScript Proxy is used. The deep watch functionality is also available on its own, [`deepWatch`](#applicvisionfrontend-friendsdeep-watch).
 
 *Example:*
 ```javascript
@@ -131,9 +133,10 @@ class StatefulComponent extends DeclarativeElement {
 
 ##### `render()` `=>` [`DynamicFragment`](#dynamicfragment)
 
-Implement the render function to visually represent the state of your component. Use the `html`-tag function to create a Dynamic Fragment. Please consult the section about the html tag function to get more usage information.
+Implement the render function to visually represent the state of your component. Use the `html`-tag function to create a `DynamicFragment`. Please consult the section about the [`html`](#htmlstrings-string-values--dynamicfragment) tag function to get more usage information.
 
-> Note: Do not manually call the render function. It will be called by the rendering logic when needed.
+> [!Note]
+> Do not manually call the render function. It will be called by the rendering logic when needed.
 
 *Example:*
 ```javascript
@@ -187,7 +190,7 @@ button {
 
 ## `@applicvision/frontend-friends/island`
 
-This is the module when working with pieces of dynamic content or interactivity, so-called interactive islands. This module can also be used in a NodeJS environment for server-side rendering.
+This is the module for working with pieces of dynamic content or interactivity, so-called interactive islands. This module can also be used in a NodeJS environment for server-side rendering.
 
 Note that this is not the place to go for making a component based architecture. For that you would use [DeclarativeElement](#applicvisionfrontend-friendsdeclarative-element).
 
@@ -258,7 +261,7 @@ const helloIsland = island(
 
 helloIsland.mount(document.body)
 
-// Changing state triggers 
+// Changing state triggers update
 helloIsland.state.name = 'World'
 ```
 
@@ -279,7 +282,7 @@ The recommended way to create instances of `DynamicIsland` is to use the [island
 
 ##### `get hydratable: string`
 
-Returns a string representation of the island for server-side rendering. Similar to `.mount`, this will call the setup- and render function, but it will not setup reactivity.
+Returns a string representation of the island for server-side rendering. Similar to [`mount()`](#mountcontainer-htmlelement), this will call the setup- and render function, but it will not setup reactivity.
 
 #####  `pendingUpdate: Promise|null`
 
@@ -292,9 +295,11 @@ This is the current reactive state of the island. Changes to the state will caus
 *Example:*
 ```javascript
 const anIsland = island(
-	() => ({ state: { value: 1 } }),
+    // setup
+    () => ({ state: { value: 1 } }),
 
-	({ state }) => html`${state.value}`
+    // render
+    ({ state }) => html`${state.value}`
 )
 
 setInterval(() => anIsland.state.value++, 1000)
@@ -305,7 +310,7 @@ setInterval(() => anIsland.state.value++, 1000)
 
 ##### `hydrate(container: HTMLElement)`
 
-If `.hydratable` has been used on the server to send HTML to the client, `.hydrate` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
+If `.hydratable` has been used on the server to send HTML to the client, `.hydrate()` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
 
 ##### `invalidate()` `=>` `Promise`
 
@@ -341,7 +346,7 @@ Pass valid HTML to the tag function, as the string will later be passed to the [
 html`<div>hello</div>`.mount(document.body)
 ```
 
-Using expressions within `${}`, dynamic parts can be added to the html. It can be attributes:
+Using expressions within `${}`, dynamic parts can be added to the HTML. It can be attributes:
 
 #### *String attributes*
 ```javascript
@@ -414,7 +419,7 @@ html`Hello ${person.firstname} ${person.lastname}`
 // => Hello Alice
 ```
 
-Array expressions are also accepted. Note that all array items must be DynamicFramgent instances, i.e. created with the ``` html`` ```-function.
+Array expressions are also accepted. Note that all array items must be `DynamicFramgent` instances, i.e. created with the ``` html`` ```-function.
 
 ```javascript
 const items = ['Apple', 'Banana', 'Orange']
@@ -460,8 +465,10 @@ A common scenario would be having a state with a string that should be edited by
 *Example:*
 ```javascript
 island(
-	() => ({ state: { text: '' } }),
-	
+    // setup
+    () => ({ state: { text: '' } }),
+
+    // render
     ({ state }) => html`
         <input ff-share=${twoway(state, 'text')}>
         <div>length: ${state.text.length}</div>
@@ -522,7 +529,7 @@ Imagine we have a custom element which has a property which is an object.
 
 ```typescript
 class PersonInfo extends DeclarativeElement {
-	#info?: {name: string, age: number}
+    #info?: {name: string, age: number}
 
     get info() { return this.#info }
     
@@ -544,7 +551,7 @@ personInfo.info = { name: 'Alice', age: 20 }
 > [!Note]
 > In this case we could get away with atrributes using `JSON.stringify()` and `JSON.parse()` in the component, but imagine we wanted to set a function as a property instead.
 
-The way that is achieved in `DynamicFragment` is by creating an instance of PropertySetter and pass that as a 'child' to the element.
+The way setting properties is achieved in `DynamicFragment`, is by creating an instance of PropertySetter and pass that as a 'child' to the element.
 
 ```javascript
 html`<person-info>${
