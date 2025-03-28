@@ -49,6 +49,10 @@ Or in JavaScript:
 
 You can set these static properties on the subclass in order to customize common appearance and behaviour of all instances.
 
+##### `static observedAttributes: string[]`
+
+Add the names of the attributes to which changes should trigger a re-rendering of the component. This property is inherited from `HTMLELement`. More info [here](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#responding_to_attribute_changes).
+
 ##### `static style: StyleDeclaration|StyleDeclaration[]`
 
 Adds stylesheet(s) to your component's shadow DOM.
@@ -57,47 +61,30 @@ Adds stylesheet(s) to your component's shadow DOM.
 
 Setting this to a valid string identifier will add it to the element's [custom state set](https://developer.mozilla.org/en-US/docs/Web/API/ElementInternals/states) when the [shared state](#protected-get-sharedstate) is truthy.
 
-##### `static observedAttributes: string[]`
-
-Add the names of the attributes to which changes should trigger a re-rendering of the component. This property is inherited from `HTMLELement`. More info [here](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements#responding_to_attribute_changes).
 
 #### Instance properties
-
-##### `set sharedStateBinding:` [`TwoWayBinding`](#twowaybinding)
-
-Set this property to a binding object to make the element's state two-way bound. If you want to use a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. Check the example in the [`twoway`] section(#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) to see how to conveniently use shared state in a `DynamicFragment`.
-
-##### `protected get sharedState`
-
-Read the currently shared state. This will call the `get` function of the `sharedStateBinding`.
-
-##### `protected set sharedState`
-
-Update the shared state. This will call the `set` function of the `sharedStateBinding`.
 
 #####  `pendingUpdate: Promise|null`
 
 If an updating is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
 
 
+##### `protected get sharedState`
+
+Read the currently shared state. This will call the `get` function of the `sharedStateBinding`.
+
+
+##### `protected set sharedState`
+
+Update the shared state. This will call the `set` function of the `sharedStateBinding`.
+
+
+##### `set sharedStateBinding:` [`TwoWayBinding`](#twowaybinding)
+
+Set this property to a binding object to make the element's state two-way bound. If you want to use a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. Check the example in the [`twoway`] section(#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) to see how to conveniently use shared state in a `DynamicFragment`.
+
+
 #### Instance methods
-
-##### `render()` `=>` [`DynamicFragment`](#dynamicfragment)
-
-Implement the render function to visually represent the state of your component. Use the `html`-tag function to create a Dynamic Fragment. Please consult the section about the html tag function to get more usage information.
-
-> Note: Do not manually call the render function. It will be called by the rendering logic when needed.
-
-*Example:*
-```javascript
-render() {
-    return html`<div>hello</div>`
-}
-```
-
-##### `invalidate()` `=>` `Promise`
-
-Requests an asynchronous re-render of the component. A promise is returned, which resolves when the component has been updated.
 
 ##### `forwardSharedState()` `=>` [`TwoWayBinding`](#twowaybinding)
 
@@ -115,9 +102,10 @@ class MyCoolInput extends DeclarativeElement {
 }
 ```
 
-##### `protected sharedStateChanged()`
 
-This function can be overriden by your component class, if you want to customize the behaviour when the shared state changes. The default implementation calls `invalidate()` and if applicable updates the [internal state](#static-sharedstatename-string) of the element. So remember to call `super.sharedStateChanged()` if overriding.
+##### `invalidate()` `=>` `Promise`
+
+Requests an asynchronous re-rendering of the component. A promise is returned, which resolves when the component has been updated.
 
 ##### `reactive<T extends object>(object: T, effect?: (keypath: string[]) => void)` `=>` `T`
 
@@ -134,11 +122,31 @@ class StatefulComponent extends DeclarativeElement {
     })
 
     handleChange() {
-        // This will cause a re-render
+        // This will cause a re-rendering
         this.state.nested.value += 1
     }
 }
 ```
+
+
+##### `render()` `=>` [`DynamicFragment`](#dynamicfragment)
+
+Implement the render function to visually represent the state of your component. Use the `html`-tag function to create a Dynamic Fragment. Please consult the section about the html tag function to get more usage information.
+
+> Note: Do not manually call the render function. It will be called by the rendering logic when needed.
+
+*Example:*
+```javascript
+render() {
+    return html`<div>hello</div>`
+}
+```
+
+##### `protected sharedStateChanged()`
+
+This function can be overriden by your component class, if you want to customize the behaviour when the shared state changes. The default implementation calls `invalidate()` and if applicable updates the [internal state](#static-sharedstatename-string) of the element. So remember to call `super.sharedStateChanged()` if overriding.
+
+
 
 ### `css(strings: string[], ...values)`
 
@@ -269,9 +277,13 @@ The recommended way to create instances of `DynamicIsland` is to use the [island
 
 #### instance properties
 
+##### `get hydratable: string`
+
+Returns a string representation of the island for server-side rendering. Similar to `.mount`, this will call the setup- and render function, but it will not setup reactivity.
+
 #####  `pendingUpdate: Promise|null`
 
-If an updating is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
+If an update is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
 
 ##### `get state`
 
@@ -288,15 +300,16 @@ const anIsland = island(
 setInterval(() => anIsland.state.value++, 1000)
 ```
 
-##### `get hydratable`
-
-Returns a string representation of the island for server-side rendering. Similar to `.mount`, this will call the setup- and render function, but it will not setup reactivity.
 
 #### instance methods
 
 ##### `hydrate(container: HTMLElement)`
 
 If `.hydratable` has been used on the server to send HTML to the client, `.hydrate` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
+
+##### `invalidate()` `=>` `Promise`
+
+Requests an asynchronous re-rendering of the island. A promise is returned, which resolves when the island has been updated.
 
 ##### `mount(container: HTMLElement)`
 
@@ -305,10 +318,6 @@ Mounts the island in the given container. This method will call your setup and r
 ##### `unmount(cacheFragment: boolean)`
 
 Unmounts the island, and optionally caches the current fragment in memory for later reuse. By default, the fragment cache is cleared on unmount.
-
-##### `invalidate()` `=>` `Promise`
-
-Requests an asynchronous re-render of the island. A promise is returned, which resolves when the island has been updated.
 
 ## `@applicvision/frontend-friends/dynamic-fragment`
 
@@ -590,13 +599,16 @@ The `values` array represents the current dynamic pieces in the tagged template,
 
 #### Instance methods
 
-##### `mount(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
+##### `hydrate(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
 
-Mounts the fragment in the given container. If not already generated, this method creates the HTML content and attaches event listeners. If an event handler context is passed to mount, that will be the value of `this` inside any event handler.
+Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-unknown), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString` and `.hydrate()`:
 
-##### `restoreIn(container: HTMLElement|ShadowRoot)`
-
-Restores the fragment in given container. This can be used on fragments that have been unmounted. It is used by `DeclarativeElement` and `island` to reuse cached fragments.
+```javascript
+mount(container, eventHandlerContext) {
+    container.innerHTML = this.toString()
+    this.hydrate(container, eventHandlerContext)
+}
+```
 
 
 ##### `key(key: string|number): this`
@@ -621,20 +633,19 @@ html`<ul>
 </ul>`
 ```
 
+
+##### `mount(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
+
+Mounts the fragment in the given container. If not already generated, this method creates the HTML content and attaches event listeners. If an event handler context is passed to mount, that will be the value of `this` inside any event handler.
+
+##### `restoreIn(container: HTMLElement|ShadowRoot)`
+
+Restores the fragment in given container. This can be used on fragments that have been unmounted. It is used by `DeclarativeElement` and `island` to reuse cached fragments.
+
+
 ##### `toString()`
 
 Puts together the HTML string from the tagged template. This can be used on the server to send initial HTML to the client. The HTML content is ready for rendering but contains some special attributes and comments which are removed during the [hydration](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) step.
-
-##### `hydrate(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
-
-Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-unknown), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString` and `.hydrate()`:
-
-```javascript
-mount(container, eventHandlerContext) {
-    container.innerHTML = this.toString()
-    this.hydrate(container, eventHandlerContext)
-}
-```
 
 
 ## `@applicvision/frontend-friends/deep-watch`
@@ -652,7 +663,7 @@ The module exports two functions:
 
 Pass in a target object to get a deep copy back which will be watched for changes. For every change to the returned object, the `modificationCallback` will be called synchronously with the keypath of the changed property as argument.
 
-Example:
+*Example:*
 ```javascript
 const watched = deepWatch(
     {outer: { inner: 'Hello' }},
@@ -668,7 +679,7 @@ Similar to [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback
 
 This function is useful to aggregate several changes into one effect. For example, array manipulations such as prepending or removing the first element cause a lot of changes to the underlying object (keys are shifted for every item), so then it is a good idea to aggregate those changes into one callback.
 
-Example:
+*Example:*
 ```javascript
 const watchedArray = effect([1, 2, 3], (array) => console.log(array))
 watchedArray.unshift(0)
@@ -687,7 +698,7 @@ Pass an arbitrary number of arguments consisting of strings, objects or arrays o
 
 Object arguments will have their keys passed to the resulting string if their values are truthy.
 
-Example:
+*Example:*
 ```javascript
 const isActive = false
 const loading = true
