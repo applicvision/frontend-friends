@@ -81,7 +81,7 @@ Update the shared state. This will call the `set` function of the `sharedStateBi
 
 ##### `set sharedStateBinding:` [`TwoWayBinding`](#twowaybinding)
 
-Set this property to a binding object to make the element's state two-way bound. If you want to use a property of a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void--t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. 
+Set this property to a binding object to make the element's state two-way bound. If you want to use a property of a [reactive](#reactivet-extends-objectobject-t-effect-keypath-string--void-t) object as a shared state, the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function can be used here. But any object conforming to [`TwoWayBinding`](#twowaybinding) can be used. 
 
 Please check the example in the [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) section to see how to conveniently use shared state in a `DynamicFragment`.
 
@@ -105,13 +105,13 @@ class MyCoolInput extends DeclarativeElement {
 ```
 
 
-##### `invalidate()` `=>` `Promise`
+##### `invalidate(): Promise`
 
 Requests an asynchronous re-rendering of the component. A promise is returned, which resolves when the component has been updated.
 
-##### `reactive<T extends object>(object: T, effect?: (keypath: string[]) => void)` `=>` `T`
+##### `reactive<T extends object>(object: T, effect?: (keypath: string[]) => void): T`
 
-Call `reactive` to convert an initial state object to a deep reactive object. Any subsequent mutation to the object will trigger the effect function. The default effect function simply triggers an update using [`invalidate()`](#invalidate--promise). To monitor objects for changes, a JavaScript Proxy is used. The deep watch functionality is also available on its own, [`deepWatch`](#applicvisionfrontend-friendsdeep-watch).
+Call `reactive` to convert an initial state object to a deep reactive object. Any subsequent mutation to the object will trigger the effect function. The default effect function simply triggers an update using [`invalidate()`](#invalidate-promise). To monitor objects for changes, a JavaScript Proxy is used. The deep watch functionality is also available on its own, [`deepWatch`](#applicvisionfrontend-friendsdeep-watch).
 
 *Example:*
 ```javascript
@@ -153,7 +153,7 @@ This function can be overriden by your component class, if you want to customize
 
 ### `css(strings: string[], ...values)`
 
-Tag function for adding CSS to your component. The function returns an instance of `StyleDeclaration` which can be assigned to the component's [style](#static-style-styledeclarationstyledeclaration). The CSS will be added to the `adoptedStyleSheets` property of the shadow root. Thus, it will be isolated from 'outside' CSS. The tag function supports nesting of ``` css`` ```-expressions as in the following example.
+Tag function for adding CSS to your component. The function returns an instance of `StyleDeclaration` which can be assigned to the component's [style](#static-style-styledeclarationstyledeclaration). The CSS will be added to the [`adoptedStyleSheets`](https://developer.mozilla.org/en-US/docs/Web/API/ShadowRoot/adoptedStyleSheets) property of the `ShadowRoot`. Thus, it will be isolated from 'outside' CSS. The tag function supports nesting of ``` css`` ```-expressions as in the following example.
 
 *Example:*
 ```javascript
@@ -190,9 +190,9 @@ button {
 
 ## `@applicvision/frontend-friends/island`
 
-This is the module for working with pieces of dynamic content or interactivity, so-called interactive islands. This module can also be used in a NodeJS environment for server-side rendering.
+This is the module for working with pieces of dynamic content or interactivity, so-called interactive islands. This module can also be used in a JavaScript server environment such as NodeJS, for server-side rendering.
 
-Note that this is not the place to go for making a component based architecture. For that you would use [DeclarativeElement](#applicvisionfrontend-friendsdeclarative-element).
+Note that this is not the place to go for making a component based architecture. For that you would use [`DeclarativeElement`](#applicvisionfrontend-friendsdeclarative-element).
 
 The module exports a factory function for creating islands and the underlying class.
 
@@ -206,7 +206,7 @@ Factory function to create islands. It can be used in two ways.
 
 #### Island without reactive state
 
-Firstly, you can pass it just one argument, a render function. In this case the island will not have any reactive state, and updates need to be triggered manually with [`.invalidate()`](#invalidate--promise-1).
+Firstly, you can pass it just one argument, a render function. In this case the island will not have any reactive state, and updates need to be triggered manually with [`.invalidate()`](#invalidate-promise-1).
 
 The signature of this function is:
 ```typescript
@@ -242,7 +242,7 @@ island<T extends { state?: object }>(
 ): DynamicIsland<T>
 ```
 
-The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If that object includes an object on the key `state`, that object will be made reactive using [`deepWatch()`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t). That state will later be accessible and mutable as a property of the island.
+The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If the returned object includes an object on the key `state`, that object in turn will be made reactive using [`deepWatch()`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t). That state will later be accessible and mutable as a property of the island.
 
 > [!Note]
 > The reason for the extra nesting of the `state` object is that in the future there might be additions to the context object.
@@ -312,7 +312,7 @@ setInterval(() => anIsland.state.value++, 1000)
 
 If `.hydratable` has been used on the server to send HTML to the client, `.hydrate()` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
 
-##### `invalidate()` `=>` `Promise`
+##### `invalidate(): Promise`
 
 Requests an asynchronous re-rendering of the island. A promise is returned, which resolves when the island has been updated.
 
@@ -326,7 +326,7 @@ Unmounts the island, and optionally caches the current fragment in memory for la
 
 ## `@applicvision/frontend-friends/dynamic-fragment`
 
-This is the module for creating dynamic pieces of HTML. It is used in both [DeclarativeElement](#declarativeelement) and islands. It exports the following:
+This is the module for creating dynamic pieces of HTML. It is used in both [`DeclarativeElement`](#declarativeelement) and islands. It exports the following:
 
 - [`html`](#html--dynamicfragment)
 - [`DynamicFragment`](#dynamicfragment) 
@@ -346,7 +346,9 @@ Pass valid HTML to the tag function, as the string will later be passed to the [
 html`<div>hello</div>`.mount(document.body)
 ```
 
-Using expressions within `${}`, dynamic parts can be added to the HTML. It can be attributes:
+Using expressions within `${}`, dynamic parts can be added to the HTML string.
+
+Those dynamic parts can be attributes:
 
 #### *String attributes*
 ```javascript
@@ -374,7 +376,7 @@ html`<details open=${isOpen}>hello</details>`
 The type of the expression decides whether the attribute is treated as an ordinary string value attribute or a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML).
 
 >[!Note]
->In the case of input elements, changing the value or checked attribute in the dynamic fragment causes the property with the same name to be set rather than the attribute, since that is usually desirable.
+>In the case of input elements, changing the value or checked attribute in the dynamic fragment causes the property with the same name of the `HTMLInputElement` instance to be set rather than the attribute, since that is usually desirable.
 
 The expressions can also be event handlers. The attributes for event handlers should start with 'on' followed by the event name.
 
@@ -384,7 +386,7 @@ The expressions can also be event handlers. The attributes for event handlers sh
 html`<button onclick=${(event) => console.log('click', event)}>Click me!</button>`
 ```
 
-This might seem to go against all [recommendations](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Events#inline_event_handlers_%E2%80%94_dont_use_these), but under the hood the event handler is added with `addEventListener`, and no inline event handler attribute is added to the HTML. For [DeclarativeElement](#declarativeelement), the event handler is called with the component instance as `this`, so no need for manual binding.
+This might seem to go against all [recommendations](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Events#inline_event_handlers_%E2%80%94_dont_use_these), but under the hood the event handler is added with `addEventListener`, and no inline event handler attribute is added to the HTML. For [`DeclarativeElement`](#declarativeelement), the event handler is called with the component instance as `this`, so no need for manual binding.
 
 Dynamic parts can also be content.
 
@@ -402,14 +404,14 @@ html`<section>${'<h2>Hello</h2>'}</section>`
 // Will not create an h2-element, but rather the text '<h2>Hello</h2>'
 ```
 
-Instead, in order to have HTML in the expressions, use a nested ``` html`` ```-expression:
+Instead, in order to have HTML in the expressions, use a nested ``` html`` ```:
 
 ```javascript
 html`<section>${ html`<h2>${'Hello'}</h2>` }</section>`
 // Will create a header with text 'Hello'
 ```
 
-If for some reason, more dynamic HTML is needed, there is more info in the [innerHTML](#innerhtml) section.
+If for some reason, more dynamic HTML is needed, there is more info in the [`innerHTML`](#innerhtml) section.
 
 In case the value of the expression is `null`, `false` or `undefined` nothing will be output.
 
@@ -439,11 +441,11 @@ In addition to these types of expressions, there are some specials. More info on
 * [ff-share](#twowaybinding) (two-way binding)
 * [PropertySetter](#propertysetter)
 * [InnerHTML](#innerhtml)
-* [keyed Array items](#keykey-stringnumber)
+* [keyed Array items](#keykey-stringnumber-this)
 
 ### `html.key(key: string|number) => (strings: string[], ...values)` `=>` [`DynamicFragment`](#dynamicfragment)
 
-Associates a given key with the `DynamicFragment`. More info [here](#keykey-stringnumber).
+Associates a given key with the `DynamicFragment`. More info [here](#keykey-stringnumber-this).
 
 *Example:*
 
@@ -458,7 +460,7 @@ html`<li>${item.title}</li>`.key(item.id)
 
 `DynamicFragment` offers a convenient way to work with data which can change, for example by a user entering text in a text field. A special attribute named `ff-share` can be used to pass a two way binding to HTMLInputElements and custom elements which can change data somehow.
 
-The twoway function can help with creating a [`TwowayBinding`](#twowaybinding), which is simply an object with a `get` and `set` function respectively.
+The `twoway` function can help with creating a [`TwowayBinding`](#twowaybinding), which is simply an object with a `get` and `set` function respectively.
 
 A common scenario would be having a state with a string that should be edited by the user. And then perform some logic on that string for every change by the user. Here is an island demonstrating that.
 
@@ -476,7 +478,7 @@ island(
 )
 ```
 
-`ff-share` can also be used together with DeclarativeElement. The `DynamicFragment` automatically assigns the twoway binding to [`sharedStateBinding`](#set-sharedstatebinding-twowaybinding).
+`ff-share` can also be used together with `DeclarativeElement`. The `DynamicFragment` automatically assigns the twoway binding to [`sharedStateBinding`](#set-sharedstatebinding-twowaybinding).
 
 *Example:*
 ```javascript
@@ -484,7 +486,7 @@ class ToggleButton {
     render() {
         return html`
             <button onclick=${this.sharedState = !this.sharedState}>
-            ${this.sharedState ? 'on' : 'off'}
+                ${this.sharedState ? 'on' : 'off'}
             </button>
             `
     }
@@ -551,7 +553,7 @@ personInfo.info = { name: 'Alice', age: 20 }
 > [!Note]
 > In this case we could get away with atrributes using `JSON.stringify()` and `JSON.parse()` in the component, but imagine we wanted to set a function as a property instead.
 
-The way setting properties is achieved in `DynamicFragment`, is by creating an instance of PropertySetter and pass that as a 'child' to the element.
+The way setting properties is achieved in `DynamicFragment`, is by creating an instance of `PropertySetter` and pass that as a 'child' to the element.
 
 ```javascript
 html`<person-info>${
@@ -593,7 +595,7 @@ Class which manages portions of HTML with dynamic parts such as attributes and t
 
 #### Constructor
 
-Do not instantiate `DynamicFragment` using the constructor. Instead use the [tag function](#htmlstrings-string-values--dynamicfragment). The class is primarily exported for type checking. But one thing to note is that creating `DynamicFragment` is a very cheap operation. It does not touch the document, or construct an html string when created. Only when mounted, or when `.toString()` is called, does it form the HTML string, adds it to the document and attaches event listeners.
+Do not instantiate `DynamicFragment` using the constructor. Instead use the [tag function](#htmlstrings-string-values--dynamicfragment). The class is primarily exported for type checking. But one thing to note is that creating `DynamicFragment` is a very cheap operation. It neither touches the document, nor constructs an HTML string when created. Only when mounted, or when `.toString()` is called, does it form the HTML string, adds it to the document and attaches event listeners.
 
 > [!Note]
 > Depending on what you put in the expessions, `${}`, the ``` html`` ``` statement can be heavy, but that is not really part of the `DynamicFragment` creation.
@@ -608,7 +610,7 @@ The `values` array represents the current dynamic pieces in the tagged template,
 
 ##### `hydrate(container: HTMLElement|ShadowRoot, eventHandlerContext?: unknown)`
 
-Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-unknown), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString` and `.hydrate()`:
+Attaches event listeners and collects references to DOM nodes which might later be updated, that is at the locations of the `${}` expressions. Similar to [`.mount()`](#mountcontainer-htmlelementshadowroot-eventhandlercontext-unknown), an event handler context can be passed to the hydrate method. In fact, the `.mount()` method is simply a combination of `.toString()` and `.hydrate()`:
 
 ```javascript
 mount(container, eventHandlerContext) {
@@ -663,7 +665,7 @@ It uses [Proxy](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Referenc
 
 The module exports two functions:
 
-* [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void--t)
+* [`deepWatch`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t)
 * [`effect`](#effectt-extends-objecttarget-t-effect-target-t--void-t)
 
 ### `deepWatch<T extends object>(target: T, modificationCallback: (keypath: string[]) => void): T`
@@ -701,7 +703,7 @@ Utility module to work with attributes. It exports one function:
 
 ### `tokens(...definitionParts: (object | string | (object | string)[])[]): string`
 
-Pass an arbitrary number of arguments consisting of strings, objects or arrays of strings or objects. The arguments passed will be 'flattened' to one space separated string of unique tokens which can be passed to attributes expecting space separated values, such as `class`.
+Pass an arbitrary number of arguments consisting of strings, objects or arrays of strings or objects. The arguments passed will be flattened to one space separated string of unique tokens which can be passed to attributes expecting space separated values, such as `class`.
 
 Object arguments will have their keys passed to the resulting string if their values are truthy.
 
@@ -711,7 +713,7 @@ const isActive = false
 const loading = true
 const classes = tokens('base', { active: isActive, loading })
 // classes => 'base loading'
-html`<button class=${classes}>...</button>`
+html`<button class=${classes}>click</button>`
 
 const classes2 = tokens('alfa beta', [{ 'gamma': true }], 'beta ', { 'beta alfa': true })
 // classes2 => 'alfa beta gamma'
