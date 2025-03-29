@@ -9,18 +9,19 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
  * @template [SharedState=null]
+ * @abstract
  * @implements {StoreSubscriber}
  **/
 export class DeclarativeElement extends HTMLElement {
 
-	/** @param {{sharedStateName?: string}=} options */
-	constructor(options) {
+	constructor() {
 		super()
 		const shadowRoot = this.attachShadow({ mode: 'open' })
-		/** @type {typeof DeclarativeElement} */
-		// @ts-ignore
-		const componentClass = this.constructor
-		shadowRoot.adoptedStyleSheets = componentClass.stylesheets
+
+
+		const { stylesheets, sharedStateName } = this.#componentClass
+
+		shadowRoot.adoptedStyleSheets = stylesheets
 
 		if (this._provisionalStateBinding) {
 			this.#twowayBinding = this._provisionalStateBinding
@@ -28,14 +29,23 @@ export class DeclarativeElement extends HTMLElement {
 			this.#lastSharedState = this.sharedState
 		}
 
-		if (options?.sharedStateName) {
+		if (sharedStateName) {
 			this.#internals = this.attachInternals()
-			this.#sharedStateName = options.sharedStateName
 		}
 	}
 
-	/** @type {string?} */
-	#sharedStateName = null
+
+	get #componentClass() {
+		return /** @type {typeof DeclarativeElement} */(this.constructor)
+	}
+
+
+	/**
+	 * Setting this to a valid string identifier
+	 * will add it to the element's custom state set when the shared state is truthy
+	 * @type {string?}
+	 **/
+	static sharedStateName = null
 
 	/** @type {ElementInternals?} */
 	#internals = null
@@ -92,10 +102,11 @@ export class DeclarativeElement extends HTMLElement {
 	/** @protected */
 	sharedStateChanged() {
 		this.invalidate()
-		if (this.#sharedStateName) {
+		const { sharedStateName } = this.#componentClass
+		if (sharedStateName) {
 			this.sharedState ?
-				this.#internals?.states.add(this.#sharedStateName) :
-				this.#internals?.states.delete(this.#sharedStateName)
+				this.#internals?.states.add(sharedStateName) :
+				this.#internals?.states.delete(sharedStateName)
 		}
 	}
 
@@ -142,7 +153,7 @@ export class DeclarativeElement extends HTMLElement {
 	}
 
 	/**
-	 * @template {Object<string, any>} T
+	 * @template {object} T
 	 * @param {T} object
 	 * @param {(keypath: (string|symbol)[]) => void} effect
 	 * @returns {T}
@@ -206,18 +217,22 @@ export class DeclarativeElement extends HTMLElement {
 }
 
 class StyleDeclaration {
-	stringValue = ''
+	#stringValue = ''
 
 	/**
 	 * @param {TemplateStringsArray} strings
 	 * @param {(StyleDeclaration|InnerCSS)[]} nestedParts
 	 */
 	constructor(strings, nestedParts) {
-		this.stringValue = strings.reduce((total, stringPart, index) => {
+		this.#stringValue = strings.reduce((total, stringPart, index) => {
 			const nestedPart = nestedParts[index - 1]
-			if (nestedPart instanceof StyleDeclaration || nestedPart instanceof innerCSS) {
-				return total + nestedPart.stringValue + stringPart
+			if (nestedPart instanceof StyleDeclaration) {
+				return total + nestedPart + stringPart
 			}
+			if (nestedPart instanceof InnerCSS) {
+				return total + nestedPart + stringPart
+			}
+
 			throw new Error('Must nest with css-tag, or innerCSS')
 		})
 	}
@@ -228,17 +243,28 @@ class StyleDeclaration {
 	get styleSheet() {
 		if (!this.#stylesheet) {
 			this.#stylesheet = new CSSStyleSheet()
-			this.#stylesheet.replaceSync(this.stringValue)
+			this.#stylesheet.replaceSync(this.toString())
 		}
 		return this.#stylesheet
+	}
+
+	toString() {
+		return this.#stringValue
 	}
 }
 
 class InnerCSS {
 
+	/** @type {string} */
+	#stringValue
+
 	/** @param {string} cssString */
 	constructor(cssString) {
-		this.stringValue = cssString
+		this.#stringValue = cssString
+	}
+
+	toString() {
+		return this.#stringValue
 	}
 }
 

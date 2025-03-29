@@ -54,7 +54,7 @@ Then, add a script tag pointing to your application:
 
 ```html
 <script type="module" src="main.js"></script>
-````
+```
 
 And that's it! Now serve your files any way you like, and start building your web application, using modern technologies without any intermediate build tool.
 
@@ -196,3 +196,21 @@ app.mount(document.getElementById('app'))
 
 ## Examples
 A more extended example is located in the docs folder of the repository. The JavaScript can be found [here](https://github.com/applicvision/frontend-friends/blob/main/docs/js/todo-app.js). And, to check out the result of the example, please visit https://applicvision.github.io/frontend-friends/examples/todo.
+
+
+## Typescript
+
+Yes, you can use TypeScript. Frontend friends includes JSDoc annotation for most of the API. For instance, DeclarativeElement can be a generic class if using shared state:
+
+```typescript
+class MyStatefulElement extends DeclarativeElement<boolean> {
+  render() {
+    // this.sharedState state is boolean here
+    return html`active: ${this.sharedState}`
+  }
+}
+```
+
+## API Documentation
+
+API documentation is available [here](https://github.com/applicvision/frontend-friends/blob/main/docs/api/README.md).

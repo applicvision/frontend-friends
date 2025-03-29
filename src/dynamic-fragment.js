@@ -8,6 +8,7 @@ const propertyCommentPrefix = `${commentPrefix}:property:`
 
 const attributePrefix = 'data-reactive'
 
+// TODO: It would be nice if this were added as some kind of extension
 const sharedStateAttributeName = 'ff-share'
 
 /**
@@ -66,7 +67,7 @@ export function html(strings, ...values) {
 
 html.key = (/** @type {string | number} */ key) =>
 	/**
-	  * @param {TemplateStringsArray} strings
+	* @param {TemplateStringsArray} strings
 	* @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
 	*/
 	(strings, ...values) => new DynamicFragment(strings, values).key(key)
@@ -146,7 +147,7 @@ export class PropertySetter {
 }
 
 /** 
- * @template {{[key: string]: any}} T 
+ * @template {object} T 
  * @implements {TwowayBinding}
  **/
 class Twoway {
@@ -176,10 +177,9 @@ class Twoway {
 }
 
 /**
- * @template {{[key: string]: any}} T
+ * @template {object} T
  * @param {T} state
  * @param {keyof state} property
- * @return {TwowayBinding}
  */
 export function twoway(state, property) {
 	return new Twoway(state, property)
@@ -233,7 +233,7 @@ export class DynamicFragment {
 	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} */
 	#values
 
-	/** @type {any} */
+	/** @type {unknown} */
 	#eventHandlerContext
 
 	/**
@@ -245,11 +245,8 @@ export class DynamicFragment {
 		this.#values = values
 	}
 
-	copy() {
-		return new DynamicFragment(this.strings, this.values)
-	}
 
-	getHtmlString(indexPathPrefix = '') {
+	#getHtmlString(indexPathPrefix = '') {
 
 		const { strings, values } = this
 
@@ -304,12 +301,13 @@ export class DynamicFragment {
 				return
 			}
 
+			/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
+			// @ts-ignore
 			const attributeMatch = typeof part == 'string' && part.match(attributeRegex)
 
 			if (attributeMatch) {
-				/** @type {{attribute: string, quotemark: '"'|"'"|'', prefix: string}} */
-				// @ts-ignore
-				const { attribute, quotemark = '', prefix = '' } = attributeMatch.groups
+				const { quotemark = '', prefix = '' } = attributeMatch.groups
+				const attribute = attributeMatch.groups.attribute.toLowerCase()
 
 				let suffix = ''
 				if (quotemark) {
@@ -411,7 +409,7 @@ export class DynamicFragment {
 			if (isArray) {
 				value.forEach((dynamicFragment, arrayIndex) => {
 					if (dynamicFragment instanceof DynamicFragment) {
-						htmlResult += dynamicFragment.getHtmlString(indexPathPrefix + index + '-' + arrayIndex + '-')
+						htmlResult += dynamicFragment.#getHtmlString(indexPathPrefix + index + '-' + arrayIndex + '-')
 						if (arrayIndex < value.length - 1) {
 							htmlResult += `<!-- ${arrayItemSeparatorCommentPrefix}${indexPathPrefix}${index}:${arrayIndex + 1} -->`
 						}
@@ -420,7 +418,7 @@ export class DynamicFragment {
 					}
 				})
 			} else if (value instanceof DynamicFragment) {
-				htmlResult += value.getHtmlString(indexPathPrefix + index + '-')
+				htmlResult += value.#getHtmlString(indexPathPrefix + index + '-')
 			} else if (value instanceof InnerHTML) {
 				htmlResult += value.htmlString
 			} else if (value || value === 0) {
@@ -439,7 +437,7 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @param {any} eventHandlerContext
+	 * @param {unknown} eventHandlerContext
 	 */
 	#connectAttributes(eventHandlerContext) {
 
@@ -579,13 +577,13 @@ export class DynamicFragment {
 
 	/**
 	 * @param {Element|DocumentFragment|ShadowRoot} container
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 */
 	hydrate(container, eventHandlerContext) {
 		this.#nodes = [...container.childNodes]
 		if (!this.#attributeLocators) {
 			// parse the html once to find attributes
-			this.getHtmlString()
+			this.#getHtmlString()
 		}
 
 		const commentIterator = document.createNodeIterator(
@@ -698,11 +696,10 @@ export class DynamicFragment {
 
 	/**
 	 * @param {HTMLElement|ShadowRoot} container 
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 **/
 	mount(container, eventHandlerContext) {
-		const htmlString = this.getHtmlString()
-		container.innerHTML = htmlString
+		container.innerHTML = this.toString()
 		this.hydrate(container, eventHandlerContext)
 	}
 
@@ -749,11 +746,11 @@ export class DynamicFragment {
 	}
 
 	/**
-	 * @param {any=} eventHandlerContext
+	 * @param {unknown=} eventHandlerContext
 	 */
 	#buildFragment(eventHandlerContext) {
 		const template = document.createElement('template')
-		template.innerHTML = this.getHtmlString()
+		template.innerHTML = this.#getHtmlString()
 
 		this.hydrate(template.content, eventHandlerContext)
 		return template.content
@@ -786,9 +783,23 @@ export class DynamicFragment {
 
 		if (attribute == 'value' && node instanceof HTMLInputElement) {
 			node.value = newValue
+		} else {
+			node.setAttribute(attribute, newValue)
+		}
+	}
+
+	/**
+	 * @param {Extract<DynamicNode, {type: 'attribute'}>} dynamicNode
+	 * @param {boolean} newValue
+	 */
+	#updateBooleanAttribute({ attribute, node }, newValue) {
+		// set property instead of updating attribute for native inputs
+		if (node instanceof HTMLInputElement && attribute == 'checked') {
+			node.checked = newValue
+		} else {
+			node.toggleAttribute(attribute, newValue)
 		}
 
-		node.setAttribute(attribute, newValue)
 	}
 
 	/** @param {any[]} newValues */
@@ -823,7 +834,7 @@ export class DynamicFragment {
 					break
 				case 'attribute':
 					if (typeof value == 'boolean') {
-						dynamicNode.node.toggleAttribute(dynamicNode.attribute, value)
+						this.#updateBooleanAttribute(dynamicNode, value)
 					} else {
 						this.#updateStringAttribute(index, newValues)
 						updatedAttributes.add(index)
@@ -989,13 +1000,11 @@ export class DynamicFragment {
 			const activeFragment = currentFragments[index]
 			const next = nextArray[index]
 
-			// if (!nextNode) throw new Error('Array content is malformed. Document does not match data source.')
-
 			if (activeFragment.strings == next.strings) {
 				// strings are the same, update values
 				activeFragment.values = next.values
 			} else {
-				// activeFragment.#unmount()
+
 				this.#cacheFragment(activeFragment)
 
 				const cachedFragment = this.#getCached(next)
@@ -1133,6 +1142,6 @@ export class DynamicFragment {
 	}
 
 	toString() {
-		return this.getHtmlString()
+		return this.#getHtmlString()
 	}
 }

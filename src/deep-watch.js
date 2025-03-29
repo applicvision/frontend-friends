@@ -75,7 +75,7 @@ export function deepWatch(target, modificationCallback) {
 
 /**
  * Pass an object to deep watch. The `effect` function is called asynchronously on changes.
- * @template {{[key: string|symbol]: any}} T
+ * @template {object} T
  * @param {T} target
  * @param {(target: T) => void} effect
  * @returns {T}

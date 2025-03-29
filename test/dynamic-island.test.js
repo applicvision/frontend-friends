@@ -38,7 +38,9 @@ describe('Dynamic island', () => {
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 1')
 
-		island.unmout()
+		island.unmount()
+
+		expect(testContainer.textContent).to.be.empty()
 	})
 
 	it('island with state', async () => {

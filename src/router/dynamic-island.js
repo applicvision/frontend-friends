@@ -18,7 +18,7 @@ export class DynamicIslandContainer extends HTMLElement {
 	}
 
 	disconnectedCallback() {
-		this.#island?.unmout()
+		this.#island?.unmount()
 	}
 
 	/**
