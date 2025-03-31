@@ -1,4 +1,5 @@
 const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z-]+(=|(="[^"]*")|(='[^']*'))?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
@@ -305,7 +306,22 @@ export class DynamicFragment {
 			// @ts-ignore
 			const attributeMatch = typeof part == 'string' && part.match(attributeRegex)
 
+
+			/** @type {string|undefined} */
+			let elementForAttribute
 			if (attributeMatch) {
+				const precedingString = strings
+					.slice(0, index + 1)
+					.join('')
+					.slice(0, -attributeMatch[0].length)
+
+				/** @type {RegExpMatchArray & {groups: {element: string}}|null} */
+				// @ts-ignore
+				const result = precedingString.match(elementForAttributeRegex)
+				elementForAttribute = result?.groups.element
+			}
+
+			if (attributeMatch && elementForAttribute) {
 				const { quotemark = '', prefix = '' } = attributeMatch.groups
 				const attribute = attributeMatch.groups.attribute.toLowerCase()
 
