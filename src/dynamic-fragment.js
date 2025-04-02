@@ -28,7 +28,7 @@ const sharedStateAttributeName = 'ff-share'
 
 /**
  * @typedef {(
- *	{type: 'content', start: Comment, end: Comment, current?: DynamicFragment | DynamicFragment[]} |
+ *	{type: 'content', start: Comment, end: Comment} |
  * 	{type: 'property', element: HTMLElement} |
  * 	{type: 'sharedState', node: TwowayBindableElement} |
  * 	{type: 'eventhandler'} |
@@ -88,6 +88,14 @@ function elementIsNativeControlElement(element) {
 	return element instanceof HTMLInputElement ||
 		element instanceof HTMLSelectElement ||
 		element instanceof HTMLTextAreaElement
+}
+
+/**
+ * @type {(value: unknown) => value is TwowayBinding}
+ */
+function isTwowayBinding(value) {
+	// @ts-ignore
+	return typeof value?.get == 'function' && typeof value?.set == 'function'
 }
 
 /** @param {Comment} itemStart */
@@ -199,7 +207,7 @@ function updateElementWithSharedState(element, sharedState) {
 			element.checked = newValue
 		} else if (newValue instanceof Set) {
 			element.checked = newValue.has(element.name)
-		} else if (newValue instanceof Array) {
+		} else if (Array.isArray(newValue)) {
 			element.checked = newValue.includes(element.name)
 		}
 	} else if (element instanceof HTMLInputElement && element.type == 'radio') {
@@ -335,9 +343,10 @@ export class DynamicFragment {
 				}
 
 				if (attribute == sharedStateAttributeName) {
-					if (typeof value?.get != 'function' || typeof value?.set != 'function') {
+					if (!isTwowayBinding(value)) {
 						throw new Error(`${sharedStateAttributeName} must use a two way binding (get and set function)`)
 					}
+
 					htmlResult += part.slice(0, -attributeMatch[0].length)
 
 					const dataAttributeValue = indexPathPrefix + index
@@ -458,19 +467,19 @@ export class DynamicFragment {
 	#connectAttributes(eventHandlerContext) {
 
 		// first traverse children
-		this.#dynamicNodes.forEach((node) => {
+		this.#dynamicNodes.forEach((node, index) => {
 			if (node.type == 'content') {
-				/** @type {Element|ShadowRoot|DocumentFragment} */
-				// @ts-ignore
-				const parent = node.start.parentNode
-				if (node.current instanceof Array) {
-					for (const arrayNode of node.current) {
+
+				const dynamicPart = this.values[index]
+
+				if (Array.isArray(dynamicPart)) {
+					for (const arrayNode of dynamicPart) {
 						arrayNode.#connectAttributes(eventHandlerContext)
 					}
 
-				} else if (node.current) {
+				} else if (dynamicPart instanceof DynamicFragment) {
 
-					node.current.#connectAttributes(eventHandlerContext)
+					dynamicPart.#connectAttributes(eventHandlerContext)
 				}
 			}
 		})
@@ -488,8 +497,12 @@ export class DynamicFragment {
 			}
 
 			if (locator.type == 'sharedState') {
-				/** @type {TwowayBinding} */
 				const binding = this.values[locator.index]
+
+				if (!isTwowayBinding(binding)) {
+					throw new Error('Must use two way binding with sharedState')
+				}
+
 
 				if (elementIsNativeControlElement(element)) {
 					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
@@ -518,6 +531,9 @@ export class DynamicFragment {
 
 				element.addEventListener(locator.event, (event) => {
 					const handler = this.values[locator.index]
+
+					if (typeof handler !== 'function') throw new Error('Must pass function as event handler')
+
 					handler?.call(eventHandlerContext || element, event)
 				})
 			}
@@ -560,8 +576,10 @@ export class DynamicFragment {
 	 * @param {Event} event
 	 */
 	#handleNativeInputEvent(locator, element, event) {
-		/** @type {TwowayBinding} */
+
 		const binding = this.values[locator.index]
+
+		if (!isTwowayBinding(binding)) throw new Error('Invalid shared state binding')
 
 		if (element instanceof HTMLInputElement && element.type == 'checkbox') {
 			const valueBefore = binding.get()
@@ -630,24 +648,27 @@ export class DynamicFragment {
 					if (currentValue instanceof Array) {
 						return currentValue[Number(index)]
 					}
-					return currentValue.values[Number(index)]
+					const subFragment = currentValue.values[Number(index)]
+					if (!(Array.isArray(subFragment) || subFragment instanceof DynamicFragment)) {
+						throw new Error('Unexpected nesting')
+					}
+					return subFragment
 				}, this)
 
 			const currentValue = dynamicFragment.values[dynamicNodeIndex]
 
-			if (type == 'property' && currentNode.parentElement) {
-				/** @type {PropertySetter} */
-				const propertySetter = currentValue
+			if (type == 'property' && currentNode.parentElement && currentValue instanceof PropertySetter) {
+
 				const element = currentNode.parentElement
 				dynamicFragment.#dynamicNodes[dynamicNodeIndex] = { type: 'property', element }
-				if (propertySetter.key in element) {
+				if (currentValue.key in element) {
 					// @ts-ignore
-					element[propertySetter.key] = propertySetter.value
+					element[currentValue.key] = currentValue.value
 				} else {
-					console.warn('Unknown property', propertySetter.key, ' for element', element)
+					console.warn('Unknown property', currentValue.key, ' for element', element)
 				}
 			}
-			else if (type == 'array-content') {
+			else if (type == 'array-content' && Array.isArray(currentValue)) {
 
 				/** @type {Extract<DynamicNode, {type: 'content'}> | undefined} */
 				// @ts-ignore
@@ -659,8 +680,6 @@ export class DynamicFragment {
 						start: currentNode,
 						// This is not really the end, but set it for now (prevents ts-warning)
 						end: currentNode,
-						// TODO: drop the current value property
-						current: currentValue
 					}
 					if (currentValue.length > 0) {
 						currentValue[0].#nodes = nodesInItem(currentNode)
@@ -668,16 +687,14 @@ export class DynamicFragment {
 				} else {
 					node.end = currentNode
 				}
-			} else if (type == 'array-item') {
+			} else if (type == 'array-item' && Array.isArray(currentValue)) {
 				const index = Number(arrayIndex)
 				/** @type {Extract<DynamicNode, {type: 'content'}>} */
 				// @ts-ignore
 				const node = dynamicFragment.#dynamicNodes[dynamicNodeIndex]
 
-				// TODO: drop current reference
-				if (node.current instanceof Array) {
-					node.current[index].#nodes = nodesInItem(currentNode)
-				}
+				currentValue[index].#nodes = nodesInItem(currentNode)
+
 				currentNode.remove()
 			} else {
 				/** @type {Extract<DynamicNode, {type: 'content'}> | undefined} */
@@ -687,8 +704,7 @@ export class DynamicFragment {
 					dynamicFragment.#dynamicNodes[dynamicNodeIndex] = {
 						type: 'content',
 						start: currentNode,
-						end: currentNode,
-						current: currentValue instanceof DynamicFragment ? currentValue : undefined
+						end: currentNode
 					}
 					if (currentValue instanceof DynamicFragment) {
 						currentValue.#nodes = nodesInItem(currentNode)
@@ -818,36 +834,37 @@ export class DynamicFragment {
 
 	}
 
-	/** @param {any[]} newValues */
 	set values(newValues) {
-		const oldValues = this.values
-		this.#values = newValues
 
 		/** @type {Set<number>} */
 		const updatedAttributes = new Set()
 
-		newValues.forEach((value, index) => {
-			const previousValue = oldValues[index]
+		this.#values = newValues.map((value, index) => {
+			const previousValue = this.values[index]
 
 			if (value == previousValue) {
-				return
+				return value
 			}
 
 			if (value instanceof InnerHTML && previousValue instanceof InnerHTML &&
 				value.htmlString == previousValue.htmlString) {
-				return
+				return value
 			}
 
 			const dynamicNode = this.#dynamicNodes[index]
 
 			switch (dynamicNode?.type) {
 				case 'sharedState':
+
+					if (!isTwowayBinding(value)) throw new Error('Muse use two way binding')
+
 					if (elementIsNativeControlElement(dynamicNode.node)) {
 						updateElementWithSharedState(dynamicNode.node, value)
 					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
 						dynamicNode.node.sharedStateBinding = value
 					}
-					break
+					return value
+
 				case 'attribute':
 					if (typeof value == 'boolean') {
 						this.#updateBooleanAttribute(dynamicNode, value)
@@ -855,80 +872,79 @@ export class DynamicFragment {
 						this.#updateStringAttribute(index, newValues)
 						updatedAttributes.add(index)
 					}
-					break
+					return value
 				case 'attributeExtension':
 					if (!updatedAttributes.has(dynamicNode.associatedIndex)) {
 						this.#updateStringAttribute(index, newValues)
 						updatedAttributes.add(dynamicNode.associatedIndex)
 					}
-					break
+					return value
 				case 'property':
-					/** @type {PropertySetter} */
-					const { key, value: newValue } = value
 
-					if (previousValue instanceof PropertySetter &&
-						previousValue.key == key && previousValue.value == newValue
+					if (!(value instanceof PropertySetter)) throw new Error('Expected instance of PropertyStter')
+
+					const { key, value: newPropertyValue } = value
+
+					if (!(previousValue instanceof PropertySetter) ||
+						previousValue.key != key || previousValue.value != newPropertyValue
 					) {
-						return
+						// @ts-ignore
+						dynamicNode.element[key] = newPropertyValue
 					}
-					// @ts-ignore
-					dynamicNode.element[key] = newValue
-					break;
+					return value
 				case 'content':
 					if (
 						value instanceof DynamicFragment &&
-						dynamicNode.current instanceof DynamicFragment &&
-						dynamicNode.current.strings == value.strings) {
+						previousValue instanceof DynamicFragment &&
+						previousValue.strings == value.strings) {
 						// strings are the same. Just move the values
-						dynamicNode.current.values = value.values
-						break
+						previousValue.values = value.values
+
+						// Keep the previous value since no replacement has been made
+						return previousValue
 					}
 					const range = document.createRange()
 					range.setStartAfter(dynamicNode.start)
 					range.setEndBefore(dynamicNode.end)
 
 
-					if (dynamicNode.current instanceof Array) {
-						if (value instanceof Array) {
+					if (Array.isArray(previousValue)) {
+						if (Array.isArray(value)) { // array => array
 
-							/** @type {DynamicFragment[]} */
-							const nextArray = value
 
-							/** @type {DynamicFragment[]} */
-							const previousArray = previousValue
+							if (value.length && previousValue.length &&
+								previousValue.every(fragment => fragment.#key) &&
+								value.every(fragment => fragment.#key)) {
 
-							if (nextArray.length && previousArray.length &&
-								previousArray.every(fragment => fragment.#key) &&
-								nextArray.every(fragment => fragment.#key)) {
-
-								// TODO: Set current value to this instead
-								dynamicNode.current = this.#keyedListUpdate(dynamicNode.current, nextArray, dynamicNode)
-							} else {
-								// TODO: this one mutates incoming array. Instead return new accepted values
-								this.#simpleListUpdate(previousArray, nextArray, dynamicNode.current, dynamicNode)
+								return this.#keyedListUpdate(previousValue, value, dynamicNode)
 							}
-						} else {
-							this.#simpleListUpdate(previousValue, [], dynamicNode.current, dynamicNode)
-
-							this.#updateWithContent(value, dynamicNode)
+							return this.#simpleListUpdate(previousValue, value, dynamicNode)
 						}
-						break
-					} else if (dynamicNode.current instanceof DynamicFragment) {
+
+						// array => simple content
+
+						// Clear array content
+						this.#simpleListUpdate(previousValue, [], dynamicNode)
+
+						return this.#updateWithContent(value, dynamicNode)
+
+					}
+
+					if (previousValue instanceof DynamicFragment) {
 						// store previous fragment
-						dynamicNode.current.#unmount()
-						this.#cacheFragment(dynamicNode.current)
+						previousValue.#unmount()
+						this.#cacheFragment(previousValue)
 					} else {
 						range.deleteContents()
 					}
 
 					if (value instanceof Array) {
-						dynamicNode.current = []
-						this.#simpleListUpdate([], value, dynamicNode.current, dynamicNode)
-						return
-					} else {
-						this.#updateWithContent(value, dynamicNode)
+						return this.#simpleListUpdate([], value, dynamicNode)
 					}
-					break
+
+					return this.#updateWithContent(value, dynamicNode)
+
+				default: return value
 			}
 		})
 	}
@@ -946,79 +962,77 @@ export class DynamicFragment {
 
 			const reusableFragment = this.#getCached(value)
 			if (reusableFragment) {
-				reusableFragment.restoreIn(range)
 				// restore previous, and update its values
-				dynamicNode.current = reusableFragment
-				dynamicNode.current.values = value.values
-				// remove it from the cache
-				this.#fragmentCache.delete(value.strings)
-			} else {
-				range.insertNode(value.#buildFragment(this.#eventHandlerContext))
-				dynamicNode.current = value
+				reusableFragment.restoreIn(range)
+				reusableFragment.values = value.values
+				return reusableFragment
 			}
-		} else {
-
-			delete dynamicNode.current
-			if (value instanceof InnerHTML) {
-				value.insertAfter(dynamicNode.start)
-			} else {
-				const textNode = new Text((value == null || value === false) ? '' : value.toString())
-				range.insertNode(textNode)
-			}
+			range.insertNode(value.#buildFragment(this.#eventHandlerContext))
+			return value
 		}
+
+		if (value instanceof InnerHTML) {
+			value.insertAfter(dynamicNode.start)
+		} else {
+			const textNode = new Text((value == null || value === false) ? '' : value.toString())
+			range.insertNode(textNode)
+		}
+		return value
 	}
 
 	/**
 	 * @param {DynamicFragment[]} previousArray
 	 * @param {DynamicFragment[]} nextArray
-	 * @param {DynamicFragment[]} currentFragments
 	 * @param {Extract<DynamicNode, {type: 'content'}>} dynamicNode
 	 */
-	#simpleListUpdate(previousArray, nextArray, currentFragments, dynamicNode) {
+	#simpleListUpdate(previousArray, nextArray, dynamicNode) {
 
 		// Remove and cache fragments when array is shorter
-		if (previousArray.length > nextArray.length) {
+		while (previousArray.length > nextArray.length) {
 
-			while (currentFragments.length > nextArray.length) {
+			const activeFragment = previousArray.pop()
 
-				const activeFragment = currentFragments.pop()
+			if (!activeFragment) throw new Error('Unexpected Error: Did not find active fragment to cache')
 
-				if (!activeFragment) throw new Error('Unexpected Error: Did not find active fragment to cache')
+			activeFragment.#unmount()
+			this.#cacheFragment(activeFragment)
+		}
+		// if (previousArray.length < nextArray.length) {
 
-				activeFragment.#unmount()
-				this.#cacheFragment(activeFragment)
+		let fragmentToInsert
+		for (let index = previousArray.length; index < nextArray.length; index += 1) {
+			const newFragment = nextArray[index]
+			const cachedFragment = this.#getCached(newFragment)
+			fragmentToInsert ??= document.createDocumentFragment()
+			if (cachedFragment) {
+				if (!cachedFragment.#nodes) throw new Error('no nodes found??')
+
+
+				fragmentToInsert.append(...cachedFragment.#nodes)
+
+				// and update its values, to update its contents
+				cachedFragment.values = newFragment.values
+
+				nextArray[index] = cachedFragment
+			} else {
+				fragmentToInsert.append(newFragment.#buildFragment(this.#eventHandlerContext))
 			}
 
-			// Insert new
-		} else if (previousArray.length < nextArray.length) {
-
-			const fragmentToInsert = document.createDocumentFragment()
-			for (let index = previousArray.length; index < nextArray.length; index += 1) {
-				const newFragment = nextArray[index]
-				const cachedFragment = this.#getCached(newFragment)
-				if (cachedFragment) {
-					if (!cachedFragment.#nodes) throw new Error('no nodes found??')
-					fragmentToInsert.append(...cachedFragment.#nodes)
-					currentFragments.push(cachedFragment)
-					// and update its values, to update its contents
-					cachedFragment.values = newFragment.values
-				} else {
-					fragmentToInsert.append(newFragment.#buildFragment(this.#eventHandlerContext))
-					currentFragments.push(newFragment)
-				}
-
-			}
+		}
+		if (fragmentToInsert) {
 			dynamicNode.end.before(fragmentToInsert)
 		}
+		// }
 
 		// Update the ones not touched by insertion/removal
-		for (let index = 0; index < Math.min(previousArray.length, nextArray.length); index += 1) {
-			const activeFragment = currentFragments[index]
+		for (let index = 0; index < previousArray.length; index += 1) {
+			const activeFragment = previousArray[index]
 			const next = nextArray[index]
 
 			if (activeFragment.strings == next.strings) {
 				// strings are the same, update values
 				activeFragment.values = next.values
+				nextArray[index] = activeFragment
 			} else {
 
 				this.#cacheFragment(activeFragment)
@@ -1027,19 +1041,17 @@ export class DynamicFragment {
 				if (cachedFragment) {
 					activeFragment.#replaceWith(cachedFragment)
 
-					// and update its values, to update its contents
 					cachedFragment.values = next.values
-					currentFragments[index] = cachedFragment
-				} else {
+					nextArray[index] = cachedFragment
 
+				} else {
 					next.#buildFragment(this.#eventHandlerContext)
 					activeFragment.#replaceWith(next)
-
-					currentFragments[index] = next
 				}
 
 			}
 		}
+		return nextArray
 	}
 
 	/**

@@ -344,7 +344,7 @@ describe('Dynamic fragments', () => {
 
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
-		const fisrtLi = testContainer.querySelector('li')
+		const firstLi = testContainer.querySelector('li')
 
 		list[0].showDetailed = false
 		fragment.values = [getLis()]
@@ -357,7 +357,7 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
 		// This verifies that the cache has been used
-		expect(testContainer.querySelector('li')).to.equal(fisrtLi)
+		expect(testContainer.querySelector('li')).to.equal(firstLi)
 	})
 
 	it('list of items with multiple elements', () => {
