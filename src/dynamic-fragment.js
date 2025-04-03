@@ -997,61 +997,57 @@ export class DynamicFragment {
 			activeFragment.#unmount()
 			this.#cacheFragment(activeFragment)
 		}
-		// if (previousArray.length < nextArray.length) {
 
-		let fragmentToInsert
-		for (let index = previousArray.length; index < nextArray.length; index += 1) {
+		const updatedExistingItems = previousArray.map((activeFragment, index) => {
 			const newFragment = nextArray[index]
+
+			if (activeFragment.strings == newFragment.strings) {
+				// strings are the same, update values
+				activeFragment.values = newFragment.values
+				return activeFragment
+			}
+
+			this.#cacheFragment(activeFragment)
+
+			const cachedFragment = this.#getCached(newFragment)
+			if (cachedFragment) {
+				activeFragment.#replaceWith(cachedFragment)
+
+				cachedFragment.values = newFragment.values
+				nextArray[index] = cachedFragment
+				return cachedFragment
+
+			}
+			newFragment.#buildFragment(this.#eventHandlerContext)
+			activeFragment.#replaceWith(newFragment)
+			return newFragment
+		})
+
+		/** @type {DocumentFragment?} */
+		let fragmentToInsert = null
+
+		const newItems = nextArray.slice(previousArray.length).map((newFragment) => {
 			const cachedFragment = this.#getCached(newFragment)
 			fragmentToInsert ??= document.createDocumentFragment()
 			if (cachedFragment) {
 				if (!cachedFragment.#nodes) throw new Error('no nodes found??')
-
 
 				fragmentToInsert.append(...cachedFragment.#nodes)
 
 				// and update its values, to update its contents
 				cachedFragment.values = newFragment.values
 
-				nextArray[index] = cachedFragment
-			} else {
-				fragmentToInsert.append(newFragment.#buildFragment(this.#eventHandlerContext))
+				return cachedFragment
 			}
+			fragmentToInsert.append(newFragment.#buildFragment(this.#eventHandlerContext))
+			return newFragment
+		})
 
-		}
 		if (fragmentToInsert) {
 			dynamicNode.end.before(fragmentToInsert)
 		}
-		// }
 
-		// Update the ones not touched by insertion/removal
-		for (let index = 0; index < previousArray.length; index += 1) {
-			const activeFragment = previousArray[index]
-			const next = nextArray[index]
-
-			if (activeFragment.strings == next.strings) {
-				// strings are the same, update values
-				activeFragment.values = next.values
-				nextArray[index] = activeFragment
-			} else {
-
-				this.#cacheFragment(activeFragment)
-
-				const cachedFragment = this.#getCached(next)
-				if (cachedFragment) {
-					activeFragment.#replaceWith(cachedFragment)
-
-					cachedFragment.values = next.values
-					nextArray[index] = cachedFragment
-
-				} else {
-					next.#buildFragment(this.#eventHandlerContext)
-					activeFragment.#replaceWith(next)
-				}
-
-			}
-		}
-		return nextArray
+		return updatedExistingItems.concat(newItems)
 	}
 
 	/**
