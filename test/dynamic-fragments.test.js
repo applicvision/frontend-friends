@@ -44,6 +44,42 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.firstElementChild?.className).to.equal('test2')
 	})
 
+	it('content which looks like attributes', () => {
+		const fragment = html`<div>attribute=${'value'}</div>`
+		fragment.mount(testContainer)
+		expect(testContainer.textContent).to.equal('attribute=value')
+
+		const fragment2 = html`<div class="${'class'}">attribute=${'value'}</div>`
+		fragment2.mount(testContainer)
+		expect(testContainer.textContent).to.equal('attribute=value')
+
+
+		expect(testContainer.querySelector('.class')).to.be.a(HTMLDivElement)
+
+		const fragment3 = html`<div
+			class="prefix ${'class'}" 
+			id=${'element_id'}
+			role=${'dialog'}
+			>div attribute=${'value'}></div>`
+		fragment3.mount(testContainer)
+		const element = testContainer.querySelector('#element_id')
+
+		expect(element?.role).to.equal('dialog')
+		expect(element?.className).to.equal('prefix class')
+		expect(element).to.equal(testContainer.querySelector('.class'))
+
+		const fragment4 = html`<p
+			data-content="test<a class='inner-content'>hello</a>"
+			id='single-${'quote'}'
+			disabled
+			class=${'class'}
+			>< test="${'value'}</p>`
+
+		fragment4.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('< test="value')
+	})
+
 	it('Attributes with fixed beginning', () => {
 		const fragment = html`<div class="beforeclass ${'test'}">hello</div>`
 		fragment.mount(testContainer)
@@ -308,7 +344,7 @@ describe('Dynamic fragments', () => {
 
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
-		const fisrtLi = testContainer.querySelector('li')
+		const firstLi = testContainer.querySelector('li')
 
 		list[0].showDetailed = false
 		fragment.values = [getLis()]
@@ -321,7 +357,7 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.innerText).to.equal('index: 0 details:alpha\nbeta\ngamma')
 
 		// This verifies that the cache has been used
-		expect(testContainer.querySelector('li')).to.equal(fisrtLi)
+		expect(testContainer.querySelector('li')).to.equal(firstLi)
 	})
 
 	it('list of items with multiple elements', () => {
