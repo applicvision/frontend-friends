@@ -70,6 +70,7 @@ export function parse(shape, data) {
 		if (data === undefined) {
 			return undefined
 		}
+		shape = shape.type
 	}
 	if (shape == String || shape == Boolean || shape == Number) {
 		if (data == null) {
@@ -84,6 +85,9 @@ export function parse(shape, data) {
 			throw new ParseError('Expected to be a valid date string, but got: ' + data)
 		}
 		return date
+	}
+	if (shape == URL) {
+		return new URL(data)
 	}
 	if (Array.isArray(shape)) {
 		if (!Array.isArray(data)) {

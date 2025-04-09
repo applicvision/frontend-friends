@@ -52,6 +52,10 @@ describe('Deep watch', () => {
 
 		watched.reverse()
 		assert.equal(spy.mock.callCount(), 9)
+
+		watched.length = 0
+		assert.equal(spy.mock.callCount(), 10)
+
 	})
 
 	it('Should watch custom class instance', () => {
