@@ -167,6 +167,9 @@ class Twoway {
 	/** @type {keyof T} */
 	#property
 
+	/** @type {Function?} */
+	#effect = null
+
 	/**
 	 * @param {T} state
 	 * @param {keyof T} property
@@ -182,6 +185,13 @@ class Twoway {
 	/** @param {any} newValue */
 	set(newValue) {
 		this.#stateContainer[this.#property] = newValue
+		this.#effect?.call(null, newValue)
+	}
+
+	/** @param {Function} effect */
+	withEffect(effect) {
+		this.#effect = effect
+		return this
 	}
 }
 
@@ -562,7 +572,7 @@ export class DynamicFragment {
 			element = onlyElement.getAttribute(dataAttribute) == locator.dataAttributeValue ?
 				onlyElement : onlyElement.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`)
 		} else {
-			const parent = this.#nodes[0].parentElement
+			const parent = this.#nodes[0].parentNode
 			element = parent?.querySelector(`[${dataAttribute}="${locator.dataAttributeValue}"]`) ?? null
 		}
 		element?.removeAttribute(dataAttribute)
