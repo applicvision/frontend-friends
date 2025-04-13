@@ -58,8 +58,8 @@ describe('Dynamic fragments', () => {
 
 		const fragment3 = html`<div
 			class="prefix ${'class'}" 
+			role=dialog
 			id=${'element_id'}
-			role=${'dialog'}
 			>div attribute=${'value'}></div>`
 		fragment3.mount(testContainer)
 		const element = testContainer.querySelector('#element_id')

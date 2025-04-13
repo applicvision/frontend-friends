@@ -1,5 +1,5 @@
 const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
-const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z-]+(=|(="[^"]*")|(='[^']*'))?\s+)*$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z-]+(=|(="[^"]*")|(='[^']*')|(=[^'"\s]+))?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
