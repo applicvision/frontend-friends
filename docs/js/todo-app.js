@@ -1,5 +1,5 @@
-import { html, twoway } from '@applicvision/frontend-friends/dynamic-fragment'
-import { island } from '@applicvision/frontend-friends/island'
+import { html, island } from '@applicvision/frontend-friends'
+import { twoway } from '@applicvision/frontend-friends/dynamic-fragment'
 import { effect } from '@applicvision/frontend-friends/deep-watch'
 import './todo-box.js'
 import { shape } from '@applicvision/frontend-friends/parse-shape'

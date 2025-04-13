@@ -1,4 +1,4 @@
-import { html } from '@applicvision/frontend-friends/dynamic-fragment'
+import { html } from '@applicvision/frontend-friends'
 import { css, DeclarativeElement } from '@applicvision/frontend-friends/declarative-element'
 
 
