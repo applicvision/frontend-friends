@@ -29,6 +29,10 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 			}
 		})
 	}
+	if (blueprint instanceof Date) {
+		// @ts-ignore
+		return new DateProxy(blueprint, () => modificationCallback(keyPath))
+	}
 	if (blueprint instanceof Map) {
 		// @ts-ignore
 		return new MapProxy(blueprint, {
@@ -154,6 +158,30 @@ class MapProxy extends Map {
 		this.handler?.didClear?.()
 	}
 }
+
+class DateProxy extends Date {
+	/**
+	 * @param {Date} originalDate
+	 * @param {() => void} modificationCallback
+	*/
+	constructor(originalDate, modificationCallback) {
+		super(originalDate)
+		this.modificationCallback = modificationCallback
+	}
+
+}
+
+Object.getOwnPropertyNames(Date.prototype)
+	.filter(name => name.startsWith('set'))
+	.forEach(method => {
+		// @ts-ignore
+		DateProxy.prototype[method] = function (...args) {
+			// @ts-ignore
+			const returnValue = Date.prototype[method].apply(this, args)
+			this.modificationCallback()
+			return returnValue
+		}
+	})
 
 
 /**
