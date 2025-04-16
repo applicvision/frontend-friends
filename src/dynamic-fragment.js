@@ -206,31 +206,79 @@ export function twoway(state, property) {
 
 /**
  * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
- * @param {TwowayBinding} sharedState
+ * @param {boolean|Set<string>|string[]|Date|number|string} newValue
  **/
-function updateElementWithSharedState(element, sharedState) {
-	// document.activeElement == element
-	const newValue = sharedState.get()
-	if (element instanceof HTMLInputElement && element.type == 'checkbox') {
+function updateNativeElement(element, newValue) {
 
-		if (typeof newValue == 'boolean') {
-			element.checked = newValue
-		} else if (newValue instanceof Set) {
-			element.checked = newValue.has(element.name)
-		} else if (Array.isArray(newValue)) {
-			element.checked = newValue.includes(element.name)
+	if (element instanceof HTMLInputElement) {
+
+		switch (element.type) {
+			case 'number':
+			case 'range':
+				if (typeof newValue == 'number') {
+
+					if (isNaN(newValue)) {
+						if (!isNaN(element.valueAsNumber)) {
+							element.value = ''
+						}
+					} else if (element.valueAsNumber != newValue) {
+						element.valueAsNumber = newValue
+					}
+
+				} else {
+					console.warn('Please use numbers with input type=number or type=range')
+				}
+				break
+			case 'datetime-local':
+				if (newValue instanceof Date) {
+					const dateString = `${newValue.toLocaleDateString('sv-SE')}T${newValue.toLocaleTimeString()}`
+					element.value = dateString
+				} else {
+					element.value = String(newValue)
+				}
+				break
+			case 'date':
+			case 'month':
+			case 'week':
+				if (newValue instanceof Date) {
+					element.valueAsDate = newValue
+				} else {
+					console.warn('please use a Date as value for input type=date|month|week')
+				}
+				break
+			case 'checkbox':
+				if (typeof newValue == 'boolean') {
+					element.checked = newValue
+				} else if (newValue instanceof Set) {
+					element.checked = newValue.has(element.name)
+				} else if (Array.isArray(newValue)) {
+					element.checked = newValue.includes(element.name)
+				} else {
+					console.warn('unexpected type for checkbox input', newValue)
+				}
+				break
+			case 'radio':
+				element.checked = newValue == element.value
+				break
+			case 'text':
+				if (typeof newValue == 'string') {
+					element.value = newValue
+					break
+				}
+				console.warn('Unexpected type for input type=string', newValue)
+			default:
+				element.value = String(newValue)
 		}
-	} else if (element instanceof HTMLInputElement && element.type == 'radio') {
-		element.checked = newValue == element.value
-	} else if (element instanceof HTMLSelectElement && element.type == 'select-multiple') {
+		return
+	}
+	if (Array.isArray(newValue) && element instanceof HTMLSelectElement && element.type == 'select-multiple') {
 		for (const option of element.options) {
-			/** @type {Array<string>} */
 			const selectedOptions = newValue
 			option.selected = selectedOptions.includes(option.value)
 		}
-	} else {
-		element.value = newValue
+		return
 	}
+	element.value = String(newValue)
 }
 
 
@@ -516,7 +564,7 @@ export class DynamicFragment {
 
 				if (elementIsNativeControlElement(element)) {
 					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
-					updateElementWithSharedState(element, binding)
+					updateNativeElement(element, binding.get())
 				} else if (elementIsTwoWayBindable(element)) {
 					element.sharedStateBinding = binding
 				} else if (customElements.get(element.localName)) {
@@ -591,31 +639,60 @@ export class DynamicFragment {
 
 		if (!isTwowayBinding(binding)) throw new Error('Invalid shared state binding')
 
-		if (element instanceof HTMLInputElement && element.type == 'checkbox') {
-			const valueBefore = binding.get()
-			if (valueBefore instanceof Set) {
-				const newSet = new Set(valueBefore)
-				element.checked ?
-					newSet.add(element.name) :
-					newSet.delete(element.name)
-				return binding.set(newSet, event)
+		if (element instanceof HTMLSelectElement) {
+			if (element.type == 'select-multiple') {
+				const selected = []
+				for (const option of element.selectedOptions) {
+					selected.push(option.value)
+				}
+				binding.set(selected, event)
+			} else {
+				binding.set(element.value, event)
 			}
-			if (valueBefore instanceof Array) {
-				const indexBefore = valueBefore.indexOf(element.name)
-				const newArrayValue = element.checked ?
-					valueBefore.concat(element.name) :
-					valueBefore.toSpliced(indexBefore, 1)
-				return binding.set(newArrayValue, event)
-			}
-			binding.set(element.checked, event)
-		} else if (element instanceof HTMLSelectElement && element.type == 'select-multiple') {
-			const selected = []
-			for (const option of element.selectedOptions) {
-				selected.push(option.value)
-			}
-			binding.set(selected, event)
-		} else {
+			return
+		}
+
+		if (element instanceof HTMLTextAreaElement) {
 			binding.set(element.value, event)
+			return
+		}
+
+		element
+
+		switch (element.type) {
+			case 'checkbox':
+				const valueBefore = binding.get()
+				if (valueBefore instanceof Set) {
+					const newSet = new Set(valueBefore)
+					element.checked ?
+						newSet.add(element.name) :
+						newSet.delete(element.name)
+					return binding.set(newSet, event)
+				}
+				if (valueBefore instanceof Array) {
+					const indexBefore = valueBefore.indexOf(element.name)
+					const newArrayValue = element.checked ?
+						valueBefore.concat(element.name) :
+						valueBefore.toSpliced(indexBefore, 1)
+					return binding.set(newArrayValue, event)
+				}
+				binding.set(element.checked, event)
+				break
+			case 'number':
+			case 'range':
+				binding.set(element.valueAsNumber, event)
+				break
+			case 'datetime-local':
+				const newValue = new Date(element.value)
+				binding.set(newValue, event)
+				break
+			case 'date':
+			case 'month':
+			case 'week':
+				binding.set(element.valueAsDate, event)
+				break
+			default:
+				binding.set(element.value)
 		}
 	}
 
@@ -869,7 +946,7 @@ export class DynamicFragment {
 					if (!isTwowayBinding(value)) throw new Error('Muse use two way binding')
 
 					if (elementIsNativeControlElement(dynamicNode.node)) {
-						updateElementWithSharedState(dynamicNode.node, value)
+						updateNativeElement(dynamicNode.node, value.get())
 					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
 						dynamicNode.node.sharedStateBinding = value
 					}
