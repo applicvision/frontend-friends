@@ -18,6 +18,11 @@ describe('Token list', () => {
 		assert.equal(classes, 'alfa beta delta')
 	})
 
+	it('Should handle null', () => {
+		const classes = tokens(null, 'valid-class')
+		assert.equal(classes, 'valid-class')
+	})
+
 	it('Should create token list from array argument', () => {
 		/** @type {string} */
 		let classes
