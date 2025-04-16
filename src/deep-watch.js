@@ -34,7 +34,7 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 	}
 	if (blueprint instanceof Date) {
 		// @ts-ignore
-		return new DateProxy(blueprint, () => modificationCallback(keyPath))
+		return new DateProxy(blueprint, value => modificationCallback(keyPath, value))
 	}
 	if (blueprint instanceof Map) {
 		// @ts-ignore
@@ -175,30 +175,6 @@ class MapProxy extends Map {
 	}
 }
 
-class DateProxy extends Date {
-	/**
-	 * @param {Date} originalDate
-	 * @param {() => void} modificationCallback
-	*/
-	constructor(originalDate, modificationCallback) {
-		super(originalDate)
-		this.modificationCallback = modificationCallback
-	}
-
-}
-
-Object.getOwnPropertyNames(Date.prototype)
-	.filter(name => name.startsWith('set'))
-	.forEach(method => {
-		// @ts-ignore
-		DateProxy.prototype[method] = function (...args) {
-			// @ts-ignore
-			const returnValue = Date.prototype[method].apply(this, args)
-			this.modificationCallback()
-			return returnValue
-		}
-	})
-
 
 /**
  * @template T
@@ -262,5 +238,33 @@ class SetProxy extends Set {
 	clear() {
 		super.clear()
 		this.handler?.didClear?.call(this)
+	}
+}
+
+class DateProxy extends Date {
+
+	#modificationCallback
+	/**
+	 * @param {Date} originalDate
+	 * @param {(value: DateProxy) => void} modificationCallback
+	*/
+	constructor(originalDate, modificationCallback) {
+		super(originalDate)
+		this.#modificationCallback = modificationCallback
+	}
+
+	static {
+
+		Object.getOwnPropertyNames(Date.prototype)
+			.filter(name => name.startsWith('set'))
+			.forEach(method => {
+				// @ts-ignore
+				this.prototype[method] = function (...args) {
+					// @ts-ignore
+					const returnValue = Date.prototype[method].apply(this, args)
+					this.#modificationCallback(this)
+					return returnValue
+				}
+			})
 	}
 }
