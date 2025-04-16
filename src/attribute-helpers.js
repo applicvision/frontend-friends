@@ -3,6 +3,7 @@
  * @param {Set<string>} tokenSet
  */
 function addTokensFromDefinition(definition, tokenSet) {
+	if (!definition) return
 	switch (typeof definition) {
 		case 'string': return addTokensFromString(definition, tokenSet)
 		case 'object':

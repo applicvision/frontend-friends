@@ -1,7 +1,7 @@
 /**
  * @template {{[key: string|symbol]: any}} T
  * @param {T} blueprint
- * @param {(keypath: (string|symbol)[]) => void} modificationCallback
+ * @param {(keypath: (string|symbol)[], newValue: unknown, oldValue?: unknown) => void} modificationCallback
  * @param {(string|symbol)[]} keyPath
  * @returns {T}
  */
@@ -15,45 +15,58 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 	if (blueprint instanceof Set) {
 		// @ts-ignore
 		return new SetProxy(blueprint, {
-			didAdd() {
-				modificationCallback(keyPath)
+			/** @this {SetProxy<any>} */
+			didAdd(entry) {
+				modificationCallback(keyPath, this)
 			},
+			/** @this {SetProxy<any>} */
 			didDelete() {
-				modificationCallback(keyPath)
+				modificationCallback(keyPath, this)
 			},
+			/** @this {SetProxy<any>} */
 			didClear() {
-				modificationCallback(keyPath)
+				modificationCallback(keyPath, this)
 			},
-			deepModification(innerKeyPath) {
-				modificationCallback(keyPath.concat(innerKeyPath))
+			deepModification(innerKeyPath, newValue, oldValue) {
+				modificationCallback(keyPath.concat(innerKeyPath), newValue, oldValue)
 			}
 		})
+	}
+	if (blueprint instanceof Date) {
+		// @ts-ignore
+		return new DateProxy(blueprint, value => modificationCallback(keyPath, value))
 	}
 	if (blueprint instanceof Map) {
 		// @ts-ignore
 		return new MapProxy(blueprint, {
-			didSet(key) {
-				modificationCallback(keyPath.concat(`Map[${key}]`))
+			didSet(key, newValue, oldValue) {
+				modificationCallback(keyPath.concat(`Map[${key}]`), newValue, oldValue)
 			},
 			didDelete(key) {
-				modificationCallback(keyPath.concat(`Map[${key}]`))
+				modificationCallback(keyPath.concat(`Map[${key}]`), null)
 			},
+			/** @this {MapProxy<any, any>} */
 			didClear() {
-				modificationCallback(keyPath)
+				modificationCallback(keyPath, this)
 			},
-			deepModification(innerKeyPath) {
-				modificationCallback(keyPath.concat(innerKeyPath))
+			deepModification(innerKeyPath, newValue, oldValue) {
+				modificationCallback(keyPath.concat(innerKeyPath), newValue, oldValue)
 			}
 		})
 	}
 	return new Proxy(blueprint, {
 		set(target, property, newValue) {
-			if (typeof newValue == 'object') {
+			if (newValue && typeof newValue == 'object') {
 				// insert a new proxy
 				newValue = recursiveWatch(newValue, modificationCallback, keyPath.concat(property))
 			}
+			const oldValue = Reflect.get(target, property)
 			const result = Reflect.set(target, property, newValue)
-			modificationCallback(keyPath.concat(property))
+
+			if (result) {
+				modificationCallback(keyPath.concat(property), newValue, oldValue)
+			}
+
 			return result
 		}
 	})
@@ -63,10 +76,13 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 /**
  * @template {{[key: string|symbol]: any}} T
  * @param {T} target
- * @param {(keypath: (string|symbol)[]) => void} modificationCallback
+ * @param {(keypath: (string|symbol)[], newValue: unknown, oldValue?: unknown) => void} modificationCallback
  * @returns {T}
  */
 export function deepWatch(target, modificationCallback) {
+	if (!target) {
+		throw new Error('Invalid target', target)
+	}
 	if (typeof target != 'object') {
 		throw new Error('Can not watch non object. Supplied target was type: ' + typeof target)
 	}
@@ -103,18 +119,21 @@ class MapProxy extends Map {
 	/**
 	 * @param {Map<KeyType, ValueType>} template
 	 * @param {{
-	 * didSet?: (key: KeyType) => void,
+	 * didSet?: (key: KeyType, newValue: ValueType, oldValue: ValueType|undefined) => void,
 	 * didDelete?: (key: KeyType) => void,
-	 * deepModification?: (keyPath: (string|symbol)[]) => void
+	 * deepModification?: (keyPath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void
 	 * didClear?: () => void }} [handler]
 	 */
 	constructor(template, handler) {
 		/** @type {[KeyType, ValueType][]}*/
 		const entries = [...template].map(([key, value]) => {
-			if (typeof value == 'object') {
+			if (value && typeof value == 'object') {
 				/** @type {ValueType} */
 				// @ts-ignore
-				const proxiedValue = recursiveWatch(value, (keyPath) => this.handler?.deepModification?.(keyPath), [`Map[${key}]`])
+				const proxiedValue = recursiveWatch(value,
+					(keyPath, newValue, oldValue) => this.handler?.deepModification?.call(this, keyPath, newValue, oldValue),
+					[`Map[${key}]`]
+				)
 				return [key, proxiedValue]
 			}
 			return [key, value]
@@ -131,8 +150,9 @@ class MapProxy extends Map {
 	 * @param {ValueType} value
 	 */
 	set(key, value) {
+		const oldValue = this.get(key)
 		super.set(key, value)
-		this.handler?.didSet?.(key)
+		this.handler?.didSet?.call(this, key, value, oldValue)
 		return this
 	}
 
@@ -143,7 +163,7 @@ class MapProxy extends Map {
 	delete(key) {
 		const result = super.delete(key)
 		if (result) {
-			this.handler?.didDelete?.(key)
+			this.handler?.didDelete?.call(this, key)
 		}
 		return result
 	}
@@ -151,7 +171,7 @@ class MapProxy extends Map {
 	/** @override */
 	clear() {
 		super.clear()
-		this.handler?.didClear?.()
+		this.handler?.didClear?.call(this)
 	}
 }
 
@@ -166,17 +186,20 @@ class SetProxy extends Set {
 	 * @param {{
 	 * didAdd?: (entry: T) => void,
 	 * didDelete?: (entry: T) => void,
-	 * deepModification?: (keyPath: (string|symbol)[]) => void
+	 * deepModification?: (keyPath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void
 	 * didClear?: () => void }} [handler]
 	 */
 	constructor(blueprint, handler) {
 		/** @type {T[]} */
 		const entries = [...blueprint].map(entry => {
-			if (typeof entry == 'object') {
+			if (entry && typeof entry == 'object') {
 
 				/** @type {T} */
 				// @ts-ignore
-				const proxiedValue = recursiveWatch(entry, (keyPath) => this.handler?.deepModification?.(keyPath), ['[Set]'])
+				const proxiedValue = recursiveWatch(entry,
+					(keyPath, newValue, oldValue) => this.handler?.deepModification?.call(this, keyPath, newValue, oldValue),
+					['[Set]']
+				)
 				return proxiedValue
 			}
 			return entry
@@ -193,7 +216,7 @@ class SetProxy extends Set {
 	 */
 	add(entry) {
 		super.add(entry)
-		this.handler?.didAdd?.(entry)
+		this.handler?.didAdd?.call(this, entry)
 		return this
 	}
 
@@ -204,7 +227,7 @@ class SetProxy extends Set {
 	delete(entry) {
 		const result = super.delete(entry)
 		if (result) {
-			this.handler?.didDelete?.(entry)
+			this.handler?.didDelete?.call(this, entry)
 		}
 		return result
 	}
@@ -214,6 +237,34 @@ class SetProxy extends Set {
 	 */
 	clear() {
 		super.clear()
-		this.handler?.didClear?.()
+		this.handler?.didClear?.call(this)
+	}
+}
+
+class DateProxy extends Date {
+
+	#modificationCallback
+	/**
+	 * @param {Date} originalDate
+	 * @param {(value: DateProxy) => void} modificationCallback
+	*/
+	constructor(originalDate, modificationCallback) {
+		super(originalDate)
+		this.#modificationCallback = modificationCallback
+	}
+
+	static {
+
+		Object.getOwnPropertyNames(Date.prototype)
+			.filter(name => name.startsWith('set'))
+			.forEach(method => {
+				// @ts-ignore
+				this.prototype[method] = function (...args) {
+					// @ts-ignore
+					const returnValue = Date.prototype[method].apply(this, args)
+					this.#modificationCallback(this)
+					return returnValue
+				}
+			})
 	}
 }

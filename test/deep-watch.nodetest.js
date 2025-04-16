@@ -10,11 +10,15 @@ describe('Deep watch', () => {
 
 		watched.a = 2
 		assert.equal(spy.mock.callCount(), 1)
-		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['a'])
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['a'], 2, 1])
 
 		watched.b.c = 3
 		assert.equal(spy.mock.callCount(), 2)
-		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['b', 'c'])
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['b', 'c'], 3, 2])
+
+		watched.b = null
+		assert.equal(spy.mock.callCount(), 3)
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['b'], null, { c: 3 }])
 	})
 
 	it('Should watch new object properties', () => {
@@ -30,10 +34,12 @@ describe('Deep watch', () => {
 
 		assert.equal(spy.mock.callCount(), 1)
 
+		assert.deepEqual(spy.mock.calls[0].arguments, [['id1', 'name'], 'Test-updated', 'Test'])
+
 		watched.id2 = { name: 'Test 2' }
 
 		assert.equal(spy.mock.callCount(), 2)
-		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['id2'])
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['id2'], { name: 'Test 2' }, undefined])
 
 	})
 
@@ -104,7 +110,7 @@ describe('Deep watch', () => {
 		watched.map.set('key1', 'newvalue')
 
 		assert.equal(spy.mock.callCount(), 1)
-		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['map', 'Map[key1]'])
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['map', 'Map[key1]'], 'newvalue', 'value1'])
 
 		watched.map.set('newkey', 'newvalue')
 
@@ -146,6 +152,8 @@ describe('Deep watch', () => {
 		const watched = deepWatch(new Set(['item1']), spy)
 		watched.add('test')
 		assert.equal(spy.mock.callCount(), 1)
+
+		assert.deepEqual(spy.mock.calls[0].arguments, [[], watched])
 		watched.add('test')
 		assert.equal(spy.mock.callCount(), 2)
 		assert.equal(watched.size, 2)
@@ -161,6 +169,6 @@ describe('Deep watch', () => {
 		const watched = deepWatch(new Set([{ name: 'test' }]), spy)
 		watched.forEach(entry => entry.name += 'updated')
 		assert.equal(spy.mock.callCount(), 1)
-		assert.deepEqual(spy.mock.calls[0].arguments[0], ['[Set]', 'name'])
+		assert.deepEqual(spy.mock.calls[0].arguments, [['[Set]', 'name'], 'testupdated', 'test'])
 	})
 })

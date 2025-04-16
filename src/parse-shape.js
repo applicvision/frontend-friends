@@ -110,10 +110,10 @@ export function parse(shape, data) {
 		const instance = new shape()
 		return Object.assign(instance, data)
 	}
-	if (typeof shape != 'object') {
+	if (typeof shape != 'object' || shape == null) {
 		throw new ParseError('Unexpected shape ' + shape)
 	}
-	if (typeof data != 'object') {
+	if (typeof data != 'object' || shape == null) {
 		throw new ParseError('Unexpected data. Expected object, got: ' + data)
 	}
 
