@@ -171,4 +171,14 @@ describe('Deep watch', () => {
 		assert.equal(spy.mock.callCount(), 1)
 		assert.deepEqual(spy.mock.calls[0].arguments, [['[Set]', 'name'], 'testupdated', 'test'])
 	})
+
+	it('Shuold watch dates', () => {
+		const spy = mock.fn()
+		const watched = deepWatch(new Date(), spy)
+		assert(watched instanceof Date)
+		watched.setFullYear(2020, 1, 1)
+		assert.equal(watched.getFullYear(), 2020)
+		assert.equal(spy.mock.callCount(), 1)
+		assert.deepEqual(spy.mock.calls[0].arguments, [[], watched])
+	})
 })
