@@ -97,9 +97,15 @@ describe('Stateful component', () => {
 		expect(shadowText(element)).to.equal('string: state value: 0')
 
 		element.changeStringState()
+		expect(element.pendingUpdate).to.be.a(Promise)
 		await element.pendingUpdate
 
 		expect(shadowText(element)).to.equal('string: newstate value: 0')
+		expect(element.pendingUpdate).to.equal(null)
+
+		// Calling the change function again should not cause rerendering, since nothing changes now
+		element.changeStringState()
+		expect(element.pendingUpdate).to.equal(null)
 	})
 	it('should update number state', async () => {
 		/** @type {Stateful} */

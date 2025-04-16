@@ -155,10 +155,10 @@ export class DeclarativeElement extends HTMLElement {
 	/**
 	 * @template {object} T
 	 * @param {T} object
-	 * @param {(keypath: (string|symbol)[]) => void} effect
+	 * @param {(keypath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void} effect
 	 * @returns {T}
 	 */
-	reactive(object, effect = () => this.invalidate()) {
+	reactive(object, effect = (keypath, newValue, oldValue) => { if (newValue !== oldValue) this.invalidate() }) {
 		return deepWatch(object, effect)
 	}
 

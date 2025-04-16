@@ -80,6 +80,33 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.textContent).to.equal('< test="value')
 	})
 
+	it('Comments in fragment', () => {
+		let fragment = html`<!-- only a comment -->`
+		fragment.mount(testContainer)
+		expect(testContainer.textContent).to.be.empty()
+		fragment = html`${'visible'}<!-- ${'not rendered'} --> back ${'again'}`
+		fragment.mount(testContainer)
+		expect(testContainer.textContent).to.equal('visible back again')
+		fragment = html`
+			<div>
+				<!-- startcomment -->
+				 <h2>hello</h2>
+				<!-- <div class=${'test'}>not here</div> -->
+				 <span>${'here'}</span>
+			</div>`
+		fragment.mount(testContainer)
+		expect(testContainer.innerText?.trim()).to.equal('hello\nhere')
+
+		fragment = html`<!-- <!-- -->double start ${'comment'}`
+		fragment.mount(testContainer)
+		expect(testContainer.textContent).to.equal('double start comment')
+
+		fragment = html`--><!-- double end ${'comment'}-->`;
+		fragment.mount(testContainer)
+		expect(testContainer.textContent).to.equal('-->')
+
+	})
+
 	it('Attributes with fixed beginning', () => {
 		const fragment = html`<div class="beforeclass ${'test'}">hello</div>`
 		fragment.mount(testContainer)
@@ -88,8 +115,8 @@ describe('Dynamic fragments', () => {
 		fragment.values = ['test2']
 
 		expect(testContainer.firstElementChild?.className).to.equal('beforeclass test2')
-
 	})
+
 	it('Attributes with fixed end', () => {
 		const fragment = html`<div class="${'test'} afterclass">hello</div>`
 		fragment.mount(testContainer)

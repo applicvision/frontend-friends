@@ -68,8 +68,10 @@ export class DynamicIsland extends EventTarget {
 	}
 
 	set state(state) {
-		this.#state = deepWatch(state ?? {}, () => {
-			this.invalidate()
+		this.#state = deepWatch(state ?? {}, (keypath, newValue, oldValue) => {
+			if (newValue !== oldValue) {
+				this.invalidate()
+			}
 		})
 	}
 

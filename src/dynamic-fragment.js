@@ -279,7 +279,7 @@ export class DynamicFragment {
 		values.forEach((value, index) => {
 			let part = strings[index]
 
-			if (part.includes('<!--') && !part.includes('-->')) {
+			if (part.lastIndexOf('<!--') > part.lastIndexOf('-->')) {
 				htmlResult += part
 				insideComment = true
 				return
