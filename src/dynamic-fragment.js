@@ -26,6 +26,9 @@ const sharedStateAttributeName = 'ff-share'
  * @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|CustomTwowayBindable} TwowayBindableElement
  */
 
+// For backwards compatibility
+export { twoway } from '@applicvision/frontend-friends'
+
 /**
  * @typedef {(
  *	{type: 'content', start: Comment, end: Comment} |
@@ -155,73 +158,6 @@ export class PropertySetter {
 	}
 }
 
-/** 
- * @template ValueType
- * @template TransformedType 
- * @implements {TwowayBinding}
- **/
-class Twoway {
-
-	/** @type {{[key: string|number|symbol]: any}} */
-	#stateContainer
-
-	/** @type {string|number|symbol} */
-	#property
-
-	/** @type {Function?} */
-	#effect = null
-
-	/** @type {((value: TransformedType) => ValueType)?} */
-	#toTransform = null
-
-	/** @type {((value: ValueType) => TransformedType)?} */
-	#fromTransform = null
-
-	/**
-	 * @param {object} state
-	 * @param {string | number | symbol} property
-	 * @param {((value: TransformedType) => ValueType)?} [toTransform]
-	 * @param {((value: ValueType) => TransformedType)?} [fromTransform]
-	 */
-	constructor(state, property, toTransform = null, fromTransform = null) {
-		this.#stateContainer = state
-		this.#property = property
-		this.#toTransform = toTransform
-		this.#fromTransform = fromTransform
-	}
-
-	/** @returns {TransformedType} */
-	get() {
-		const value = this.#stateContainer[this.#property]
-		return this.#fromTransform ? this.#fromTransform(value) : value
-	}
-
-	/** @param {TransformedType} newValue */
-	set(newValue) {
-		this.#stateContainer[this.#property] = this.#toTransform ? this.#toTransform(newValue) : newValue
-		this.#effect?.call(null, newValue)
-	}
-
-	/** @param {Function} effect */
-	withEffect(effect) {
-		this.#effect = effect
-		return this
-	}
-}
-
-/**
- * @template {object} T
- * @template {keyof T} Key
- * @template [TransformedType=T[Key]]
- * @param {T} state
- * @param {Key} property
- * @param {((value: TransformedType) => T[Key])} [toTransform]
- * @param {((value: T[Key]) => TransformedType)} [fromTransform]
- * @returns {Twoway<T[Key], TransformedType>}
- */
-export function twoway(state, property, toTransform, fromTransform) {
-	return new Twoway(state, property, toTransform, fromTransform)
-}
 
 /**
  * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
@@ -287,7 +223,7 @@ function updateNativeElement(element, newValue) {
 			if (newValue instanceof Date) {
 				element.valueAsDate = newValue
 			} else {
-				console.warn('please use a Date as value for input type=date|month|week')
+				console.warn('Please use a Date as value for input type=date|month|week')
 			}
 			break
 		case 'checkbox':
@@ -298,7 +234,7 @@ function updateNativeElement(element, newValue) {
 			} else if (Array.isArray(newValue)) {
 				element.checked = newValue.includes(element.name)
 			} else {
-				console.warn('unexpected type for checkbox input', newValue)
+				console.warn('Unexpected type for checkbox input', newValue)
 			}
 			break
 		case 'radio':
