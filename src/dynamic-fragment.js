@@ -156,35 +156,49 @@ export class PropertySetter {
 }
 
 /** 
- * @template {object} T 
+ * @template ValueType
+ * @template TransformedType 
  * @implements {TwowayBinding}
  **/
 class Twoway {
 
-	/** @type {T} */
+	/** @type {{[key: string|number|symbol]: any}} */
 	#stateContainer
 
-	/** @type {keyof T} */
+	/** @type {string|number|symbol} */
 	#property
 
 	/** @type {Function?} */
 	#effect = null
 
+	/** @type {((value: TransformedType) => ValueType)?} */
+	#toTransform = null
+
+	/** @type {((value: ValueType) => TransformedType)?} */
+	#fromTransform = null
+
 	/**
-	 * @param {T} state
-	 * @param {keyof T} property
+	 * @param {object} state
+	 * @param {string | number | symbol} property
+	 * @param {((value: TransformedType) => ValueType)?} [toTransform]
+	 * @param {((value: ValueType) => TransformedType)?} [fromTransform]
 	 */
-	constructor(state, property) {
+	constructor(state, property, toTransform = null, fromTransform = null) {
 		this.#stateContainer = state
 		this.#property = property
+		this.#toTransform = toTransform
+		this.#fromTransform = fromTransform
 	}
 
+	/** @returns {TransformedType} */
 	get() {
-		return this.#stateContainer[this.#property]
+		const value = this.#stateContainer[this.#property]
+		return this.#fromTransform ? this.#fromTransform(value) : value
 	}
-	/** @param {any} newValue */
+
+	/** @param {TransformedType} newValue */
 	set(newValue) {
-		this.#stateContainer[this.#property] = newValue
+		this.#stateContainer[this.#property] = this.#toTransform ? this.#toTransform(newValue) : newValue
 		this.#effect?.call(null, newValue)
 	}
 
@@ -197,11 +211,16 @@ class Twoway {
 
 /**
  * @template {object} T
+ * @template {keyof T} Key
+ * @template [TransformedType=T[Key]]
  * @param {T} state
- * @param {keyof state} property
+ * @param {Key} property
+ * @param {((value: TransformedType) => T[Key])} [toTransform]
+ * @param {((value: T[Key]) => TransformedType)} [fromTransform]
+ * @returns {Twoway<T[Key], TransformedType>}
  */
-export function twoway(state, property) {
-	return new Twoway(state, property)
+export function twoway(state, property, toTransform, fromTransform) {
+	return new Twoway(state, property, toTransform, fromTransform)
 }
 
 /**
@@ -210,75 +229,91 @@ export function twoway(state, property) {
  **/
 function updateNativeElement(element, newValue) {
 
-	if (element instanceof HTMLInputElement) {
+	if (element instanceof HTMLSelectElement) {
+		if (element.type == 'select-multiple') {
+			if (!Array.isArray(newValue)) {
+				console.warn('Please use array with select type=select-multiple')
+				return
+			}
+			for (const option of element.options) {
+				const selectedOptions = newValue
+				option.selected = selectedOptions.includes(option.value)
+			}
+			return
+		}
 
-		switch (element.type) {
-			case 'number':
-			case 'range':
-				if (typeof newValue == 'number') {
+		element.value = String(newValue)
+		return
 
-					if (isNaN(newValue)) {
-						if (!isNaN(element.valueAsNumber)) {
-							element.value = ''
-						}
-					} else if (element.valueAsNumber != newValue) {
-						element.valueAsNumber = newValue
+	}
+	if (element instanceof HTMLTextAreaElement) {
+		if (typeof newValue != 'string') {
+			console.warn('Please use strings with textarea')
+			element.value = String(newValue)
+		} else {
+			element.value = newValue
+		}
+		return
+	}
+
+	switch (element.type) {
+		case 'number':
+		case 'range':
+			if (typeof newValue == 'number') {
+
+				if (isNaN(newValue)) {
+					if (!isNaN(element.valueAsNumber)) {
+						element.value = ''
 					}
+				} else if (element.valueAsNumber != newValue) {
+					element.valueAsNumber = newValue
+				}
 
-				} else {
-					console.warn('Please use numbers with input type=number or type=range')
-				}
-				break
-			case 'datetime-local':
-				if (newValue instanceof Date) {
-					const dateString = `${newValue.toLocaleDateString('sv-SE')}T${newValue.toLocaleTimeString()}`
-					element.value = dateString
-				} else {
-					element.value = String(newValue)
-				}
-				break
-			case 'date':
-			case 'month':
-			case 'week':
-				if (newValue instanceof Date) {
-					element.valueAsDate = newValue
-				} else {
-					console.warn('please use a Date as value for input type=date|month|week')
-				}
-				break
-			case 'checkbox':
-				if (typeof newValue == 'boolean') {
-					element.checked = newValue
-				} else if (newValue instanceof Set) {
-					element.checked = newValue.has(element.name)
-				} else if (Array.isArray(newValue)) {
-					element.checked = newValue.includes(element.name)
-				} else {
-					console.warn('unexpected type for checkbox input', newValue)
-				}
-				break
-			case 'radio':
-				element.checked = newValue == element.value
-				break
-			case 'text':
-				if (typeof newValue == 'string') {
-					element.value = newValue
-					break
-				}
-				console.warn('Unexpected type for input type=string', newValue)
-			default:
+			} else {
+				console.warn('Please use numbers with input type=number or type=range')
+			}
+			break
+		case 'datetime-local':
+			if (newValue instanceof Date) {
+				const dateString = `${newValue.toLocaleDateString('sv-SE')}T${newValue.toLocaleTimeString()}`
+				element.value = dateString
+			} else {
 				element.value = String(newValue)
-		}
-		return
+			}
+			break
+		case 'date':
+		case 'month':
+		case 'week':
+			if (newValue instanceof Date) {
+				element.valueAsDate = newValue
+			} else {
+				console.warn('please use a Date as value for input type=date|month|week')
+			}
+			break
+		case 'checkbox':
+			if (typeof newValue == 'boolean') {
+				element.checked = newValue
+			} else if (newValue instanceof Set) {
+				element.checked = newValue.has(element.name)
+			} else if (Array.isArray(newValue)) {
+				element.checked = newValue.includes(element.name)
+			} else {
+				console.warn('unexpected type for checkbox input', newValue)
+			}
+			break
+		case 'radio':
+			element.checked = newValue == element.value
+			break
+		case 'text':
+			if (typeof newValue == 'string') {
+				element.value = newValue
+				break
+			}
+			console.warn('Unexpected type for input type=string', newValue)
+		default:
+			element.value = String(newValue)
 	}
-	if (Array.isArray(newValue) && element instanceof HTMLSelectElement && element.type == 'select-multiple') {
-		for (const option of element.options) {
-			const selectedOptions = newValue
-			option.selected = selectedOptions.includes(option.value)
-		}
-		return
-	}
-	element.value = String(newValue)
+
 }
 
 
@@ -656,8 +691,6 @@ export class DynamicFragment {
 			binding.set(element.value, event)
 			return
 		}
-
-		element
 
 		switch (element.type) {
 			case 'checkbox':
