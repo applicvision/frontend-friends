@@ -175,10 +175,8 @@ This is quite a common pattern, so there is an easier way; we can use a two-way 
 So we rewrite the previous code slightly.
 
 ```javascript
-import { island, html } from '@applicvision/frontend-friends'
-
 // twoway is a little helper that simply creates an object with a set and a get function, which is the shape required for the two-way binding.
-import { twoway } from '@applicvision/frontend-friends/dynamic-fragment'
+import { island, html, twoway } from '@applicvision/frontend-friends'
 
 const app = island(
   () => ({ state: { name: '' }}),
