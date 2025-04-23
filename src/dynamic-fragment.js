@@ -296,7 +296,7 @@ export class DynamicFragment {
 		const attributeLocators = []
 
 		values.forEach((value, index) => {
-			let part = strings[index]
+			let part = strings.raw[index]
 
 			if (part.lastIndexOf('<!--') > part.lastIndexOf('-->')) {
 				htmlResult += part

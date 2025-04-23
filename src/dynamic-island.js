@@ -71,6 +71,7 @@ export class DynamicIsland extends EventTarget {
 		this.#state = deepWatch(state ?? {}, (keypath, newValue, oldValue) => {
 			if (newValue !== oldValue) {
 				this.invalidate()
+				this.dispatchEvent(new CustomEvent('statechange', { detail: { keypath } }))
 			}
 		})
 	}
@@ -108,6 +109,10 @@ export class DynamicIsland extends EventTarget {
 			// console.timeEnd('initial render')
 		}
 		this.dispatchEvent(new Event('mount'))
+	}
+
+	get container() {
+		return this.#container
 	}
 
 	/**
@@ -203,6 +208,7 @@ export class DynamicIsland extends EventTarget {
 
 			this.#restoreFromCache(dynamicFragment)
 		}
+		this.dispatchEvent(new Event('update'))
 	}
 }
 
