@@ -1,12 +1,11 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert'
-import { html } from '../src/dynamic-fragment.js'
-import { island } from '@applicvision/frontend-friends'
+import { island, html } from '@applicvision/frontend-friends'
 
 describe('Server side rendering', () => {
 	it('Should render a string', () => {
-		const result = html`<h1>hejsan ${'name'}</h1>`.toString()
-		assert.equal(result, '<h1>hejsan <!-- dynamic-fragment:content:0 -->name<!-- dynamic-fragment:content:0 --></h1>')
+		const result = html`<h1>hello ${'name'}</h1>`.toString()
+		assert.equal(result, '<h1>hello <!-- dynamic-fragment:content:0 -->name<!-- dynamic-fragment:content:0 --></h1>')
 	})
 
 	it('should render an island', () => {
