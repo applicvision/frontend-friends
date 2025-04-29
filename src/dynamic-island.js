@@ -42,6 +42,8 @@ export class DynamicIsland extends EventTarget {
 		super()
 		this.#render = renderFunction
 		this.#setup = setup
+
+		this.#reactiveSetup()
 	}
 
 	/** @type {Promise<any>|null} */
@@ -94,20 +96,16 @@ export class DynamicIsland extends EventTarget {
 	/** @param {HTMLElement} container */
 	mount(container) {
 
-		this.#reactiveSetup()
-
-		this.#container = container
-		if (this.#currentFragment) {
-			/** @type {T} */
-			// @ts-ignore
-			const renderArg = { ...this.#renderProps, state: this.state }
-
-			this.#restoreFromCache(this.#render(renderArg))
-		} else {
-			// console.time('initial render')
-			this.#internalRender()
-			// console.timeEnd('initial render')
+		if (container == this.container) {
+			return
 		}
+		if (this.container) {
+			console.warn('already mounted somewehere else. Unmounting')
+			this.unmount(true)
+		}
+		this.#container = container
+
+		this.#internalRender()
 		this.dispatchEvent(new Event('mount'))
 	}
 
@@ -136,10 +134,8 @@ export class DynamicIsland extends EventTarget {
 		return this.#render(this.#setup()).toString()
 	}
 
-	/**
-	 * @param {boolean} cacheFragment
-	 */
-	unmount(cacheFragment) {
+
+	unmount(cacheFragment = false) {
 		if (cacheFragment) {
 			this.#cacheIsland()
 		} else {
@@ -152,14 +148,14 @@ export class DynamicIsland extends EventTarget {
 		this.subscriptions.clear()
 		this.routeSubscription = null
 
-		if (this.#container) {
-			this.#container.innerHTML = ''
+		if (this.container) {
+			this.container.innerHTML = ''
 			this.#container = null
 		}
 	}
 
 	#cacheIsland() {
-		if (!(this.#container && this.#currentFragment)) return
+		if (!(this.container && this.#currentFragment)) return
 
 		this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 	}
@@ -168,16 +164,16 @@ export class DynamicIsland extends EventTarget {
 	 * @param {DynamicFragment} dynamicFragment
 	 */
 	#restoreFromCache(dynamicFragment) {
-		if (!this.#container) return
+		if (!this.container) return
 
 		const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
 
 		if (reusableFragment) {
-			reusableFragment.restoreIn(this.#container)
+			reusableFragment.restoreIn(this.container)
 			this.#currentFragment = reusableFragment
 			this.#currentFragment.values = dynamicFragment.values
 		} else {
-			dynamicFragment.mount(this.#container)
+			dynamicFragment.mount(this.container)
 			this.#currentFragment = dynamicFragment
 		}
 	}
@@ -188,7 +184,7 @@ export class DynamicIsland extends EventTarget {
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
 	#internalRender() {
-		if (!this.#container) return
+		if (!this.container) return
 
 		/** @type {T} */
 		// @ts-ignore
@@ -196,7 +192,7 @@ export class DynamicIsland extends EventTarget {
 
 		const dynamicFragment = this.#render(renderArg)
 		if (!this.#currentFragment) {
-			dynamicFragment.mount(this.#container)
+			dynamicFragment.mount(this.container)
 			this.#currentFragment = dynamicFragment
 			return
 		}

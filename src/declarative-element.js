@@ -12,7 +12,7 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
  * @abstract
  * @implements {StoreSubscriber}
  **/
-export class DeclarativeElement extends HTMLElement {
+export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	constructor() {
 		super()

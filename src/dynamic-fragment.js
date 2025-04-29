@@ -27,7 +27,7 @@ const sharedStateAttributeName = 'ff-share'
  */
 
 // For backwards compatibility
-export { twoway } from '@applicvision/frontend-friends'
+export { twoway } from '@applicvision/frontend-friends/attribute-helpers'
 
 /**
  * @typedef {(
