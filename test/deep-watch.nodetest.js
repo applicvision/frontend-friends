@@ -21,6 +21,14 @@ describe('Deep watch', () => {
 		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['b'], null, { c: 3 }])
 	})
 
+	it('Should not touch original', () => {
+		const original = { test: 1, aSet: new Set([1, 2, 3]), anArray: [1, 2, 3] }
+
+		deepWatch(original, mock.fn())
+
+		assert.equal(original.aSet.constructor.name, 'Set')
+	})
+
 	it('Should watch new object properties', () => {
 		const spy = mock.fn()
 

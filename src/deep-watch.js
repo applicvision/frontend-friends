@@ -6,12 +6,7 @@
  * @returns {T}
  */
 function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
-	// replace all properties which are object with new proxies
-	for (var property in blueprint) {
-		if (blueprint[property] && typeof blueprint[property] == 'object') {
-			blueprint[property] = recursiveWatch(blueprint[property], modificationCallback, keyPath.concat(property))
-		}
-	}
+
 	if (blueprint instanceof Set) {
 		// @ts-ignore
 		return new SetProxy(blueprint, {
@@ -54,7 +49,29 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 			}
 		})
 	}
-	return new Proxy(blueprint, {
+
+	let copy
+
+	if (Array.isArray(blueprint)) {
+		copy = blueprint.map((item, index) => {
+			return item && typeof item == 'object' ?
+				recursiveWatch(item, modificationCallback, keyPath.concat(String(index))) :
+				item
+		})
+	} else {
+
+		copy = Object.entries(blueprint).reduce(
+			(copy, [key, value]) => {
+				if (value && typeof value == 'object') {
+					copy[key] = recursiveWatch(value, modificationCallback, keyPath.concat(key))
+				} else {
+					copy[key] = value
+				}
+				return copy
+			}, Object.create(Object.getPrototypeOf(blueprint)))
+	}
+
+	return new Proxy(copy, {
 		set(target, property, newValue) {
 			if (newValue && typeof newValue == 'object') {
 				// insert a new proxy

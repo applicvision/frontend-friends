@@ -59,7 +59,7 @@ class Twoway {
 	/** @type {string|number|symbol} */
 	#property
 
-	/** @type {Function?} */
+	/** @type {((newValue: TransformedType) => void)?} */
 	#effect = null
 
 	/** @type {((fieldValue: TransformedType) => ValueType)?} */
@@ -93,7 +93,7 @@ class Twoway {
 		this.#effect?.call(null, newValue)
 	}
 
-	/** @param {Function} effect */
+	/** @param {(newValue: TransformedType) => void} effect */
 	withEffect(effect) {
 		this.#effect = effect
 		return this
