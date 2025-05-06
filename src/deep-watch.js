@@ -221,7 +221,7 @@ class MapProxy {
  */
 class SetProxy {
 
-	#set
+	#originalSet
 
 	#handler
 
@@ -233,7 +233,7 @@ class SetProxy {
 	 * didClear?: (set: Set<T>) => void }} [handler]
 	 */
 	constructor(blueprint, handler) {
-		this.#set = blueprint
+		this.#originalSet = blueprint
 
 		this.#handler = handler
 	}
@@ -242,8 +242,8 @@ class SetProxy {
 	 * @param {T} entry
 	 */
 	add(entry) {
-		const returnValue = this.#set.add(entry)
-		this.#handler?.didAdd?.(entry, this.#set)
+		const returnValue = this.#originalSet.add(entry)
+		this.#handler?.didAdd?.(entry, this.#originalSet)
 		return returnValue
 	}
 
@@ -251,16 +251,16 @@ class SetProxy {
 	 * @param {T} entry
 	 */
 	delete(entry) {
-		const result = this.#set.delete(entry)
+		const result = this.#originalSet.delete(entry)
 		if (result) {
-			this.#handler?.didDelete?.(entry, this.#set)
+			this.#handler?.didDelete?.(entry, this.#originalSet)
 		}
 		return result
 	}
 
 	clear() {
-		this.#set.clear()
-		this.#handler?.didClear?.(this.#set)
+		this.#originalSet.clear()
+		this.#handler?.didClear?.(this.#originalSet)
 	}
 
 	static {
@@ -278,7 +278,7 @@ class SetProxy {
 
 					/** @this {SetProxy<any>} */
 					const getter = function () {
-						return descriptor.get?.apply(this.#set)
+						return descriptor.get?.apply(this.#originalSet)
 					}
 					Object.defineProperty(getter, 'name', { value: descriptor.get.name, writable: false })
 					newDescriptor.get = getter
@@ -288,7 +288,7 @@ class SetProxy {
 					 * @param {unknown[]} args
 					 **/
 					const valueFunction = function (...args) {
-						return descriptor.value.apply(this.#set, args)
+						return descriptor.value.apply(this.#originalSet, args)
 					}
 					Object.defineProperty(valueFunction, 'name', { value: descriptor.value.name, writable: false })
 					newDescriptor.value = valueFunction
