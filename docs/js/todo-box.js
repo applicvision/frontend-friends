@@ -49,7 +49,7 @@ export default class TodoBox extends DeclarativeElement {
 				part=wrapper
 				onclick=${this.toggle}
 			>
-			<div id=indicator part=indicator>✓</div>
+			<div id=indicator part=indicator>${this.sharedState ? '✓' : ''}</div>
 		</button>`
 	}
 

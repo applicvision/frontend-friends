@@ -38,7 +38,6 @@ class Todo {
 const app = island(() => {
 	return {
 		state: {
-			newTodoFieldValue: '',
 			/** @type {''|'done'|'todo'} */
 			currentFilter: '',
 			/** @type {Todo[]} */

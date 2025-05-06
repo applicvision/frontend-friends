@@ -10,21 +10,18 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 	if (blueprint instanceof Set) {
 		// @ts-ignore
 		return new SetProxy(blueprint, {
-			/** @this {SetProxy<any>} */
-			didAdd(entry) {
-				modificationCallback(keyPath, this)
+
+			didAdd(entry, set) {
+				modificationCallback(keyPath, set)
 			},
-			/** @this {SetProxy<any>} */
-			didDelete() {
-				modificationCallback(keyPath, this)
+
+			didDelete(_, set) {
+				modificationCallback(keyPath, set)
 			},
-			/** @this {SetProxy<any>} */
-			didClear() {
-				modificationCallback(keyPath, this)
+
+			didClear(set) {
+				modificationCallback(keyPath, set)
 			},
-			deepModification(innerKeyPath, newValue, oldValue) {
-				modificationCallback(keyPath.concat(innerKeyPath), newValue, oldValue)
-			}
 		})
 	}
 	if (blueprint instanceof Date) {
@@ -50,33 +47,23 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 		})
 	}
 
-	let copy
-
-	if (Array.isArray(blueprint)) {
-		copy = blueprint.map((item, index) => {
-			return item && typeof item == 'object' ?
-				recursiveWatch(item, modificationCallback, keyPath.concat(String(index))) :
-				item
-		})
-	} else {
-
-		copy = Object.entries(blueprint).reduce(
-			(copy, [key, value]) => {
-				if (value && typeof value == 'object') {
-					copy[key] = recursiveWatch(value, modificationCallback, keyPath.concat(key))
-				} else {
-					copy[key] = value
-				}
-				return copy
-			}, Object.create(Object.getPrototypeOf(blueprint)))
-	}
-
-	return new Proxy(copy, {
-		set(target, property, newValue) {
-			if (newValue && typeof newValue == 'object') {
-				// insert a new proxy
-				newValue = recursiveWatch(newValue, modificationCallback, keyPath.concat(property))
+	return new Proxy(blueprint, {
+		get(target, property, reciever) {
+			const value = Reflect.get(target, property, reciever)
+			if (value && typeof value == 'object') {
+				return recursiveWatch(value, modificationCallback, keyPath.concat(property))
 			}
+			return value
+		},
+		deleteProperty(target, property) {
+			const oldValue = Reflect.get(target, property)
+			const result = Reflect.deleteProperty(target, property)
+			if (result) {
+				modificationCallback(keyPath.concat(property), undefined, oldValue)
+			}
+			return result
+		},
+		set(target, property, newValue) {
 			const oldValue = Reflect.get(target, property)
 			const result = Reflect.set(target, property, newValue)
 
@@ -127,159 +114,216 @@ export function effect(target, effect) {
 	return watchedObject
 }
 
-
 /**
  * @template KeyType, ValueType
- * @extends {Map<KeyType, ValueType>} 
  */
-class MapProxy extends Map {
+class MapProxy {
+
+	#map
+
+	#handler
+
 	/**
-	 * @param {Map<KeyType, ValueType>} template
+	 * @param {Map<KeyType, ValueType>} map
 	 * @param {{
-	 * didSet?: (key: KeyType, newValue: ValueType, oldValue: ValueType|undefined) => void,
-	 * didDelete?: (key: KeyType) => void,
-	 * deepModification?: (keyPath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void
-	 * didClear?: () => void }} [handler]
+	   * didSet?: (key: KeyType, newValue: ValueType, oldValue: ValueType|undefined) => void,
+	   * didDelete?: (key: KeyType) => void,
+	   * deepModification?: (keyPath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void
+	   * didClear?: () => void }} handler
 	 */
-	constructor(template, handler) {
-		/** @type {[KeyType, ValueType][]}*/
-		const entries = [...template].map(([key, value]) => {
-			if (value && typeof value == 'object') {
-				/** @type {ValueType} */
-				// @ts-ignore
-				const proxiedValue = recursiveWatch(value,
-					(keyPath, newValue, oldValue) => this.handler?.deepModification?.call(this, keyPath, newValue, oldValue),
-					[`Map[${key}]`]
-				)
-				return [key, proxiedValue]
-			}
-			return [key, value]
-		})
+	constructor(map, handler) {
 
-		super(entries)
-
-		this.handler = handler
+		this.#map = map
+		this.#handler = handler
 	}
 
 	/**
-	 * @override
+	 * @param {KeyType} key
+	 */
+	get(key) {
+		const value = this.#map.get(key)
+		if (value && typeof value == 'object') {
+
+			return recursiveWatch(value,
+				(keyPath, newValue, oldValue) => this.#handler?.deepModification?.call(this, keyPath, newValue, oldValue),
+				[`Map[${key}]`]
+			)
+		}
+		return value
+	}
+
+	/**
 	 * @param {KeyType} key
 	 * @param {ValueType} value
 	 */
 	set(key, value) {
-		const oldValue = this.get(key)
-		super.set(key, value)
-		this.handler?.didSet?.call(this, key, value, oldValue)
+		const oldValue = this.#map.get(key)
+		this.#map.set(key, value)
+		this.#handler?.didSet?.call(this, key, value, oldValue)
 		return this
 	}
 
 	/**
-	 * @override
 	 * @param {KeyType} key
 	 */
 	delete(key) {
-		const result = super.delete(key)
+		const result = this.#map.delete(key)
 		if (result) {
-			this.handler?.didDelete?.call(this, key)
+			this.#handler?.didDelete?.call(this, key)
 		}
 		return result
 	}
 
-	/** @override */
 	clear() {
-		super.clear()
-		this.handler?.didClear?.call(this)
+		this.#map.clear()
+		this.#handler?.didClear?.call(this)
+	}
+
+	static {
+		const overriden = Object.getOwnPropertyNames(this.prototype)
+
+		Object.entries(Object.getOwnPropertyDescriptors(Map.prototype))
+			.filter(([name]) => !overriden.includes(name))
+			.forEach(([name, descriptor]) => {
+				const { get, value, ...rest } = descriptor
+				/** @type {PropertyDescriptor} */
+				const newDescriptor = {
+					...rest
+				}
+				if (descriptor.get) {
+
+					/** @this {MapProxy<any, any>} */
+					const getter = function () {
+						return descriptor.get?.apply(this.#map)
+					}
+					Object.defineProperty(getter, 'name', { value: descriptor.get.name, writable: false })
+					newDescriptor.get = getter
+				} else if (descriptor.value) {
+					/**
+					 * @this {MapProxy<any, any>}
+					 * @param {unknown[]} args
+					 **/
+					const valueFunction = function (...args) {
+						return descriptor.value.apply(this.#map, args)
+					}
+					Object.defineProperty(valueFunction, 'name', { value: descriptor.value.name, writable: false })
+					newDescriptor.value = valueFunction
+
+				}
+				Object.defineProperty(this.prototype, name, newDescriptor)
+			})
 	}
 }
 
 
 /**
  * @template T
- * @extends {Set<T>}
  */
-class SetProxy extends Set {
+class SetProxy {
+
+	#set
+
+	#handler
+
 	/**
 	 * @param {Set<T>} blueprint
 	 * @param {{
-	 * didAdd?: (entry: T) => void,
-	 * didDelete?: (entry: T) => void,
-	 * deepModification?: (keyPath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void
-	 * didClear?: () => void }} [handler]
+	 * didAdd?: (entry: T, set: Set<T>) => void,
+	 * didDelete?: (entry: T, set: Set<T>) => void,
+	 * didClear?: (set: Set<T>) => void }} [handler]
 	 */
 	constructor(blueprint, handler) {
-		/** @type {T[]} */
-		const entries = [...blueprint].map(entry => {
-			if (entry && typeof entry == 'object') {
+		this.#set = blueprint
 
-				/** @type {T} */
-				// @ts-ignore
-				const proxiedValue = recursiveWatch(entry,
-					(keyPath, newValue, oldValue) => this.handler?.deepModification?.call(this, keyPath, newValue, oldValue),
-					['[Set]']
-				)
-				return proxiedValue
-			}
-			return entry
-		})
-
-		super(entries)
-
-		this.handler = handler
+		this.#handler = handler
 	}
 
 	/**
-	 * @override
 	 * @param {T} entry
 	 */
 	add(entry) {
-		super.add(entry)
-		this.handler?.didAdd?.call(this, entry)
-		return this
+		const returnValue = this.#set.add(entry)
+		this.#handler?.didAdd?.(entry, this.#set)
+		return returnValue
 	}
 
 	/**
-	 * @override
 	 * @param {T} entry
 	 */
 	delete(entry) {
-		const result = super.delete(entry)
+		const result = this.#set.delete(entry)
 		if (result) {
-			this.handler?.didDelete?.call(this, entry)
+			this.#handler?.didDelete?.(entry, this.#set)
 		}
 		return result
 	}
 
-	/**
-	 * @override
-	 */
 	clear() {
-		super.clear()
-		this.handler?.didClear?.call(this)
+		this.#set.clear()
+		this.#handler?.didClear?.(this.#set)
+	}
+
+	static {
+		const overriden = Object.getOwnPropertyNames(this.prototype)
+
+		Object.entries(Object.getOwnPropertyDescriptors(Set.prototype))
+			.filter(([name]) => !overriden.includes(name))
+			.forEach(([name, descriptor]) => {
+				const { get, value, ...rest } = descriptor
+				/** @type {PropertyDescriptor} */
+				const newDescriptor = {
+					...rest
+				}
+				if (descriptor.get) {
+
+					/** @this {SetProxy<any>} */
+					const getter = function () {
+						return descriptor.get?.apply(this.#set)
+					}
+					Object.defineProperty(getter, 'name', { value: descriptor.get.name, writable: false })
+					newDescriptor.get = getter
+				} else if (descriptor.value) {
+					/**
+					 * @this {SetProxy<any>}
+					 * @param {unknown[]} args
+					 **/
+					const valueFunction = function (...args) {
+						return descriptor.value.apply(this.#set, args)
+					}
+					Object.defineProperty(valueFunction, 'name', { value: descriptor.value.name, writable: false })
+					newDescriptor.value = valueFunction
+
+				}
+				Object.defineProperty(this.prototype, name, newDescriptor)
+			})
 	}
 }
 
-class DateProxy extends Date {
+class DateProxy {
 
+	#date
 	#modificationCallback
 	/**
 	 * @param {Date} originalDate
-	 * @param {(value: DateProxy) => void} modificationCallback
+	 * @param {(value: Date) => void} modificationCallback
 	*/
 	constructor(originalDate, modificationCallback) {
-		super(originalDate)
+		this.#date = originalDate
 		this.#modificationCallback = modificationCallback
 	}
 
 	static {
 
 		Object.getOwnPropertyNames(Date.prototype)
-			.filter(name => name.startsWith('set'))
+			.filter(name => name != 'constructor')
 			.forEach(method => {
 				// @ts-ignore
 				this.prototype[method] = function (...args) {
 					// @ts-ignore
-					const returnValue = Date.prototype[method].apply(this, args)
-					this.#modificationCallback(this)
+					const returnValue = Date.prototype[method].apply(this.#date, args)
+					if (method.startsWith('set')) {
+						this.#modificationCallback(this.#date)
+					}
 					return returnValue
 				}
 			})

@@ -19,14 +19,43 @@ describe('Deep watch', () => {
 		watched.b = null
 		assert.equal(spy.mock.callCount(), 3)
 		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['b'], null, { c: 3 }])
+
+		delete watched.a
+		assert.equal(spy.mock.callCount(), 4)
+
+		assert.deepEqual(spy.mock.calls.at(-1)?.arguments, [['a'], undefined, 2])
 	})
 
 	it('Should not touch original', () => {
-		const original = { test: 1, aSet: new Set([1, 2, 3]), anArray: [1, 2, 3] }
+		const original = { test: 1, anArray: [1, 2, 3] }
+
+		const shallowCopy = { ...original }
 
 		deepWatch(original, mock.fn())
 
-		assert.equal(original.aSet.constructor.name, 'Set')
+		for (const key in original) {
+			// @ts-ignore
+			assert.equal(original[key], shallowCopy[key])
+		}
+	})
+
+	it('Can be nested', () => {
+		const outerWatcher = mock.fn()
+		const innerWatcher = mock.fn()
+
+		const innerWatched = deepWatch({ test: { innermost: 'original' } }, innerWatcher)
+
+		const outerWatched = deepWatch({ other: 'only-outer', inner: innerWatched }, outerWatcher)
+
+		outerWatched.inner.test.innermost = 'by outer'
+
+		assert.equal(outerWatcher.mock.callCount(), 1)
+		assert.equal(innerWatcher.mock.callCount(), 1)
+
+		innerWatched.test.innermost = 'by inner'
+
+		assert.equal(innerWatcher.mock.callCount(), 2)
+		assert.equal(outerWatcher.mock.callCount(), 1)
 	})
 
 	it('Should watch new object properties', () => {
@@ -59,16 +88,17 @@ describe('Deep watch', () => {
 		assert.equal(spy.mock.callCount(), 4)
 
 		watched.pop()
-		assert.equal(spy.mock.callCount(), 5)
+
+		assert.equal(spy.mock.callCount(), 6)
 
 		watched.push({ a: 10 })
-		assert.equal(spy.mock.callCount(), 7)
+		assert.equal(spy.mock.callCount(), 8)
 
 		watched.reverse()
-		assert.equal(spy.mock.callCount(), 9)
+		assert.equal(spy.mock.callCount(), 10)
 
 		watched.length = 0
-		assert.equal(spy.mock.callCount(), 10)
+		assert.equal(spy.mock.callCount(), 11)
 
 	})
 
@@ -122,6 +152,8 @@ describe('Deep watch', () => {
 
 		watched.map.set('newkey', 'newvalue')
 
+		assert.equal(watched.map.size, 3)
+
 		assert.equal(spy.mock.callCount(), 2)
 		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['map', 'Map[newkey]'])
 
@@ -156,12 +188,13 @@ describe('Deep watch', () => {
 	})
 
 	it('Should watch a set', () => {
+		const aSet = new Set(['item1'])
 		const spy = mock.fn()
-		const watched = deepWatch(new Set(['item1']), spy)
+		const watched = deepWatch(aSet, spy)
 		watched.add('test')
 		assert.equal(spy.mock.callCount(), 1)
 
-		assert.deepEqual(spy.mock.calls[0].arguments, [[], watched])
+		assert.deepEqual(spy.mock.calls[0].arguments, [[], aSet])
 		watched.add('test')
 		assert.equal(spy.mock.callCount(), 2)
 		assert.equal(watched.size, 2)
@@ -171,22 +204,43 @@ describe('Deep watch', () => {
 		watched.clear()
 		assert.equal(watched.size, 0)
 		assert.equal(spy.mock.callCount(), 4)
-	})
-	it('Should watch set with objects', () => {
-		const spy = mock.fn()
-		const watched = deepWatch(new Set([{ name: 'test' }]), spy)
-		watched.forEach(entry => entry.name += 'updated')
+
+		spy.mock.resetCalls()
+
+		const watchedNested = deepWatch({ aSet: new Set(['item-a', 'item-b']) }, spy)
+
+		watchedNested.aSet.add('item-c')
+		assert.equal(watchedNested.aSet.size, 3)
 		assert.equal(spy.mock.callCount(), 1)
-		assert.deepEqual(spy.mock.calls[0].arguments, [['[Set]', 'name'], 'testupdated', 'test'])
+
+		watchedNested.aSet.delete('item-d')
+		assert.equal(spy.mock.callCount(), 1)
+
+		watchedNested.aSet.delete('item-a')
+		assert.equal(spy.mock.callCount(), 2)
+
 	})
 
 	it('Shuold watch dates', () => {
 		const spy = mock.fn()
-		const watched = deepWatch(new Date(), spy)
-		assert(watched instanceof Date)
+		const firstDate = new Date()
+		const watched = deepWatch(firstDate, spy)
+
+		assert.equal(watched.constructor.name, 'DateProxy')
 		watched.setFullYear(2020, 1, 1)
 		assert.equal(watched.getFullYear(), 2020)
 		assert.equal(spy.mock.callCount(), 1)
-		assert.deepEqual(spy.mock.calls[0].arguments, [[], watched])
+		assert.deepEqual(spy.mock.calls[0].arguments, [[], firstDate])
+
+		spy.mock.resetCalls()
+
+		const anotherDate = new Date()
+		const watchedNested = deepWatch({ date: anotherDate }, spy)
+
+		assert.equal(watched.constructor.name, 'DateProxy')
+		watchedNested.date.setFullYear(2020, 1, 1)
+		assert.equal(watchedNested.date.getFullYear(), 2020)
+		assert.equal(spy.mock.callCount(), 1)
+		assert.deepEqual(spy.mock.calls[0].arguments, [['date'], anotherDate])
 	})
 })
