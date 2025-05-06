@@ -24,7 +24,8 @@
   "scripts": {
     "tdd": "test-browser --watch test --watch src",
     "node-test": "node --test **/*.nodetest.js",
-    "node-tdd": "node --watch --test **/*.nodetest.js"
+    "node-tdd": "node --watch --test **/*.nodetest.js",
+    "serve-docs": "self-serve docs --base frontend-friends"
   },
   "files": [
     "src"
