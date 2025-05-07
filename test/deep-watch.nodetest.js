@@ -226,7 +226,7 @@ describe('Deep watch', () => {
 		const firstDate = new Date()
 		const watched = deepWatch(firstDate, spy)
 
-		assert.equal(watched.constructor.name, 'DateProxy')
+		assert(watched instanceof Date)
 		watched.setFullYear(2020, 1, 1)
 		assert.equal(watched.getFullYear(), 2020)
 		assert.equal(spy.mock.callCount(), 1)
@@ -237,7 +237,7 @@ describe('Deep watch', () => {
 		const anotherDate = new Date()
 		const watchedNested = deepWatch({ date: anotherDate }, spy)
 
-		assert.equal(watched.constructor.name, 'DateProxy')
+		assert(watchedNested.date instanceof Date)
 		watchedNested.date.setFullYear(2020, 1, 1)
 		assert.equal(watchedNested.date.getFullYear(), 2020)
 		assert.equal(spy.mock.callCount(), 1)
