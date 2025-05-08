@@ -72,6 +72,11 @@ test('Test the todo app', async ({ page }) => {
 	await expect(page.locator('#app').getByRole('listitem')).toHaveCount(1)
 	await expect(page.locator('#app').getByRole('listitem')).toContainText('Updated todo')
 
+	await page.reload()
+
+	await expect(page.locator('#app').getByRole('listitem')).toHaveCount(1)
+	await expect(page.locator('#app').getByRole('listitem')).toContainText('Updated todo')
+
 	await page.locator('#app').getByRole('listitem').getByRole('button', { name: '✕' }).click()
 
 	await expect(page.locator('#app').getByRole('list')).toBeEmpty()

@@ -104,7 +104,14 @@ function removeTodo(todoItem) {
 }
 
 function clearDone() {
-	app.state.todos = app.state.todos.filter(({ done }) => !done)
+	const { todos } = app.state
+	// Since we have an effect associated with the todos array,
+	// we mutate it instead of filtering and resetting
+	for (let index = todos.length - 1; index >= 0; index--) {
+		if (todos[index].done) {
+			todos.splice(index, 1)
+		}
+	}
 }
 
 

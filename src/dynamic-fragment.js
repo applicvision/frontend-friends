@@ -101,23 +101,34 @@ function isTwowayBinding(value) {
 	return typeof value?.get == 'function' && typeof value?.set == 'function'
 }
 
-/** @param {Comment} itemStart */
-function nodesInItem(itemStart) {
+/**
+ * @param {Comment} itemStart 
+ * @param {string} itemIndexPath
+ **/
+function nodesInItem(itemStart, itemIndexPath) {
+
 	const itemNodes = []
 	/** @type {Node|null} */
 	let next = itemStart
 	while (next = next.nextSibling) {
 
-		if (next instanceof Comment &&
-			(next.textContent?.trim().startsWith(arrayItemSeparatorCommentPrefix) ||
-				next.textContent?.trim().startsWith(contentCommentPrefix)
-			)
+		if (next instanceof Comment) {
 
-		) {
-			break
+			const commentText = next.textContent?.trim() ?? ''
+
+			if (commentText == `${contentCommentPrefix}${itemIndexPath}` ||
+				commentText.startsWith(`${arrayItemSeparatorCommentPrefix}${itemIndexPath}:`)
+			) {
+				break
+			}
 		}
+
 		itemNodes.push(next)
 	}
+	if (!next) {
+		console.warn('Unexpectedly reached end of child list without finding end of item', 'indexPath:', itemIndexPath)
+	}
+
 	return itemNodes
 }
 
@@ -689,7 +700,9 @@ export class DynamicFragment {
 		// @ts-ignore
 		while ((currentNode = commentIterator.nextNode())) {
 
-			const [_, type, indexPathString, arrayIndex] = currentNode.textContent?.split(':') ?? []
+			/** @type {[string, ('content'|'array-content'|'array-item'|'property'), string, string]} */
+			// @ts-ignore
+			const [_, type, indexPathString, arrayIndex] = currentNode.textContent?.trim().split(':') ?? ['', '', '', '']
 
 			const indexPath = indexPathString.split('-')
 			const dynamicNodeIndex = Number(indexPath.pop())
@@ -726,30 +739,18 @@ export class DynamicFragment {
 			}
 			else if (type == 'array-content' && Array.isArray(currentValue)) {
 
-				/** @type {Extract<DynamicNode, {type: 'content'}> | undefined} */
-				// @ts-ignore
-				const node = dynamicFragment.#dynamicNodes[dynamicNodeIndex]
-				if (!node) {
-
-					dynamicFragment.#dynamicNodes[dynamicNodeIndex] = {
-						type: 'content',
-						start: currentNode,
-						// This is not really the end, but set it for now (prevents ts-warning)
-						end: currentNode,
-					}
-					if (currentValue.length > 0) {
-						currentValue[0].#nodes = nodesInItem(currentNode)
-					}
-				} else {
-					node.end = currentNode
+				dynamicFragment.#dynamicNodes[dynamicNodeIndex] = {
+					type: 'content',
+					start: currentNode,
+					// This is not really the end, but set it for now (prevents ts-warning)
+					end: currentNode,
+				}
+				if (currentValue.length > 0) {
+					currentValue[0].#nodes = nodesInItem(currentNode, indexPathString)
 				}
 			} else if (type == 'array-item' && Array.isArray(currentValue)) {
-				const index = Number(arrayIndex)
-				/** @type {Extract<DynamicNode, {type: 'content'}>} */
-				// @ts-ignore
-				const node = dynamicFragment.#dynamicNodes[dynamicNodeIndex]
 
-				currentValue[index].#nodes = nodesInItem(currentNode)
+				currentValue[Number(arrayIndex)].#nodes = nodesInItem(currentNode, indexPathString)
 
 				currentNode.remove()
 			} else {
@@ -763,7 +764,7 @@ export class DynamicFragment {
 						end: currentNode
 					}
 					if (currentValue instanceof DynamicFragment) {
-						currentValue.#nodes = nodesInItem(currentNode)
+						currentValue.#nodes = nodesInItem(currentNode, indexPathString)
 					}
 				} else {
 					node.end = currentNode
