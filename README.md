@@ -35,16 +35,16 @@ app.mount(document.body)
 Then to check it out in your browser you have two options; CDN or build tool.
 
 ### CDN
-The easiest way to get started is to let your web page get the code from JSDeliver, and their nice [modules CDN](https://www.jsdelivr.com/esm).
+The easiest way to get started is to let your web page get the code from a CDN which can deliver ES modules, such as JSDeliver, and their [modules CDN](https://www.jsdelivr.com/esm), or [esm.sh](https://esm.sh).
 
-First, add an importmap to your html-file. This tells the browser to fetch all imports of `@applicvision/frontend-friends` from esm.run, which is JSDeliver's modules CDN.
+First, add an importmap to your html-file. This tells the browser to fetch all imports of `@applicvision/frontend-friends` from esm.sh.
 
 ```html
 <script type="importmap">
 {
   "imports": {
-    "@applicvision/frontend-friends": "https://esm.run/@applicvision/frontend-friends",
-    "@applicvision/frontend-friends/": "https://esm.run/@applicvision/frontend-friends/"
+    "@applicvision/frontend-friends": "https://esm.sh/@applicvision/frontend-friends",
+    "@applicvision/frontend-friends/": "https://esm.sh/@applicvision/frontend-friends/"
   }
 }
 </script>

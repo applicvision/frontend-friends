@@ -329,8 +329,7 @@ Unmounts the island, and optionally caches the current fragment in memory for la
 This is the module for creating dynamic pieces of HTML. It is used in both [`DeclarativeElement`](#declarativeelement) and islands. It exports the following:
 
 - [`html`](#html--dynamicfragment)
-- [`DynamicFragment`](#dynamicfragment) 
-- [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
+- [`DynamicFragment`](#dynamicfragment)
 - [`innerHTML`](#innerhtml)
 - [`PropertySetter`](#propertysetter)
 - [`TwowayBinding`](#twowaybinding)
@@ -456,49 +455,9 @@ html.key(item.id)`<li>${item.title}</li>`
 html`<li>${item.title}</li>`.key(item.id)
 ```
 
-### `twoway<T extends object>(state: T, property: keyof T):` [`TwowayBinding`](#twowaybinding)
-
-`DynamicFragment` offers a convenient way to work with data which can change, for example by a user entering text in a text field. A special attribute named `ff-share` can be used to pass a two way binding to HTMLInputElements and custom elements which can change data somehow.
-
-The `twoway` function can help with creating a [`TwowayBinding`](#twowaybinding), which is simply an object with a `get` and `set` function respectively.
-
-A common scenario would be having a state with a string that should be edited by the user. And then perform some logic on that string for every change by the user. Here is an island demonstrating that.
-
-*Example:*
-```javascript
-island(
-    // setup
-    () => ({ state: { text: '' } }),
-
-    // render
-    ({ state }) => html`
-        <input ff-share=${twoway(state, 'text')}>
-        <div>length: ${state.text.length}</div>
-    `
-)
-```
-
-`ff-share` can also be used together with `DeclarativeElement`. The `DynamicFragment` automatically assigns the twoway binding to [`sharedStateBinding`](#set-sharedstatebinding-twowaybinding).
-
-*Example:*
-```javascript
-class ToggleButton {
-    render() {
-        return html`
-            <button onclick=${this.sharedState = !this.sharedState}>
-                ${this.sharedState ? 'on' : 'off'}
-            </button>
-            `
-    }
-}
-
-// Given a state of {active: boolean}, shared state would be passed like this to the ToggleButton
-html`<toggle-button ff-share=${twoway(state, 'active')}></toggle-button>`
-```
-
 ### `TwoWayBinding`
 
-A simple type which two-way bindings should implement.
+A simple type which two-way bindings should implement. For more information about two-way bindings, check out the section on the twoway-helper, [twoway](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding).
 
 ```typescript
 type TwowayBinding<T> = {
@@ -699,7 +658,55 @@ watchedArray.unshift(0)
 
 Utility module to work with attributes. It exports one function:
 
+* [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
 * [`tokens`](#tokensdefinitionparts-object--string--object--string-string)
+
+### `twoway<T extends object>(state: T, property: keyof T):` [`TwowayBinding`](#twowaybinding)
+
+`DynamicFragment` offers a convenient way to work with data which can change, for example by a user entering text in a text field. A special attribute named `ff-share` can be used to pass a two-way binding to native input elements (`<input type="...">`), text areas (`<textarea></textarea>`), selects (`<select><option></select>`) and custom elements which can change data somehow.
+
+The `twoway` function can help with creating a [`TwowayBinding`](#twowaybinding), which is simply an object with a `get` and `set` function respectively.
+
+A common scenario would be having a state with a string that should be edited by the user. And then perform some logic on that string for every change by the user. Here is an island demonstrating that.
+
+*Example:*
+```javascript
+island(
+    // setup
+    () => ({ state: { text: '' } }),
+
+    // render
+    ({ state }) => html`
+        <input ff-share=${twoway(state, 'text')}>
+        <div>length: ${state.text.length}</div>
+    `
+)
+```
+
+`ff-share` can also be used together with `DeclarativeElement`. The `DynamicFragment` automatically assigns the twoway binding to [`sharedStateBinding`](#set-sharedstatebinding-twowaybinding).
+
+*Example:*
+```javascript
+class ToggleButton {
+    render() {
+        return html`
+            <button onclick=${this.sharedState = !this.sharedState}>
+                ${this.sharedState ? 'on' : 'off'}
+            </button>
+            `
+    }
+}
+
+// Given a state of {active: boolean}, shared state would be passed like this to the ToggleButton
+html`<toggle-button ff-share=${twoway(state, 'active')}></toggle-button>`
+```
+
+It is also possible to attach a side effect to the twoway binding, by using `withEffect`. For instance if you have some state which depends on another state, or just want a place to log something.
+
+*Example:*
+```javascript
+html`<input ff-share=${twoway(state, 'text').withEffect(newText => console.log('The new text', newText))}`
+```
 
 ### `tokens(...definitionParts: (object | string | (object | string)[])[]): string`
 
