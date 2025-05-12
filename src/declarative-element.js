@@ -6,6 +6,24 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
  * @import {TwowayBinding} from './dynamic-fragment.js'
  **/
 
+/**
+ * @type {(value: unknown) => value is TwowayBinding}
+ */
+function isTwowayBinding(value) {
+	// @ts-ignore
+	return typeof value?.get == 'function' && typeof value?.set == 'function'
+}
+
+/**
+ * @param {unknown} binding
+ * @param {unknown} newValue
+ **/
+function setToBindingOrThrow(binding, newValue) {
+	if (!isTwowayBinding(binding)) throw new Error('Please use a two-way binding')
+
+	return binding.set(newValue)
+}
+
 
 /**
  * @template [SharedState=null]
@@ -77,10 +95,10 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		return this.#mounted
 	}
 
-	/** @type {TwowayBinding?} */
+	/** @type {TwowayBinding|object?} */
 	#twowayBinding = null
 	/**
-	 * @param {TwowayBinding} binding
+	 * @param {TwowayBinding|object} binding
 	 */
 	set sharedStateBinding(binding) {
 		const firstBinding = !this.#twowayBinding
@@ -120,7 +138,11 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 * @type {SharedState}
 	 */
 	get sharedState() {
-		return this.#twowayBinding?.get() ?? null
+		if (isTwowayBinding(this.#twowayBinding)) {
+			return this.#twowayBinding.get()
+		}
+		// @ts-ignore
+		return this.#twowayBinding
 	}
 
 	/**
@@ -128,7 +150,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 * @param {SharedState} newValue
 	 */
 	set sharedState(newValue) {
-		this.#twowayBinding?.set(newValue)
+		setToBindingOrThrow(this.#twowayBinding, newValue)
 	}
 
 	connectedCallback() {

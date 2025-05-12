@@ -22,7 +22,7 @@ const sharedStateAttributeName = 'ff-share'
 
 /**
  * @typedef {{get: () => any, set: (newValue: any, event?: Event) => void}} TwowayBinding
- * @typedef {Element & {sharedStateBinding: TwowayBinding}} CustomTwowayBindable
+ * @typedef {Element & {sharedStateBinding: TwowayBinding|object}} CustomTwowayBindable
  * @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|CustomTwowayBindable} TwowayBindableElement
  */
 
@@ -63,7 +63,7 @@ const escapeEntries = Object.entries(escapeCharacters)
 
 /**
  * @param {TemplateStringsArray} strings
- * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
+ * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|object|null|undefined)[]} values
  */
 export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
@@ -86,6 +86,15 @@ function elementIsTwoWayBindable(element) {
 	return false
 }
 
+/**
+ * This is not really checking that items are strings. It is serving as a TS type assertion
+ * @type {(value: unknown) => value is string[]}
+ */
+function isArrayOfStrings(value) {
+	return Array.isArray(value)
+
+}
+
 /** @param {Element} element */
 function elementIsNativeControlElement(element) {
 	return element instanceof HTMLInputElement ||
@@ -101,6 +110,23 @@ function isTwowayBinding(value) {
 	return typeof value?.get == 'function' && typeof value?.set == 'function'
 }
 
+/**
+ * @param {unknown} binding
+ * @param {unknown} newValue
+ * @param {Event} event
+ **/
+function setToBindingOrThrow(binding, newValue, event) {
+	if (!isTwowayBinding(binding)) throw new Error('Please use a two-way binding')
+
+	return binding.set(newValue, event)
+}
+
+/**
+ * @param {unknown} value
+ **/
+function getFromBinding(value) {
+	return isTwowayBinding(value) ? value.get() : value
+}
 /**
  * @param {Comment} itemStart 
  * @param {string} itemIndexPath
@@ -172,31 +198,35 @@ export class PropertySetter {
 
 /**
  * @param {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement} element
- * @param {boolean|Set<string>|string[]|Date|number|string} newValue
+ * @param {unknown} newValue
  **/
 function updateNativeElement(element, newValue) {
 
 	if (element instanceof HTMLSelectElement) {
 		if (element.type == 'select-multiple') {
-			if (!Array.isArray(newValue)) {
+
+			if (!isArrayOfStrings(newValue)) {
 				console.warn('Please use array with select type=select-multiple')
 				return
 			}
 			for (const option of element.options) {
-				const selectedOptions = newValue
-				option.selected = selectedOptions.includes(option.value)
+				option.selected = newValue.includes(option.value)
 			}
 			return
 		}
 
-		element.value = String(newValue)
+		if (typeof newValue == 'string') {
+			element.value = newValue
+		} else {
+			console.warn('Please use a string with single select')
+		}
+
 		return
 
 	}
 	if (element instanceof HTMLTextAreaElement) {
 		if (typeof newValue != 'string') {
 			console.warn('Please use strings with textarea')
-			element.value = String(newValue)
 		} else {
 			element.value = newValue
 		}
@@ -206,19 +236,17 @@ function updateNativeElement(element, newValue) {
 	switch (element.type) {
 		case 'number':
 		case 'range':
-			if (typeof newValue == 'number') {
+			if (typeof newValue != 'number') return console.warn('Please use numbers with input type=number or type=range')
 
-				if (isNaN(newValue)) {
-					if (!isNaN(element.valueAsNumber)) {
-						element.value = ''
-					}
-				} else if (element.valueAsNumber != newValue) {
-					element.valueAsNumber = newValue
+
+			if (isNaN(newValue)) {
+				if (!isNaN(element.valueAsNumber)) {
+					element.value = ''
 				}
-
-			} else {
-				console.warn('Please use numbers with input type=number or type=range')
+			} else if (element.valueAsNumber != newValue) {
+				element.valueAsNumber = newValue
 			}
+
 			break
 		case 'datetime-local':
 			if (newValue instanceof Date) {
@@ -252,11 +280,10 @@ function updateNativeElement(element, newValue) {
 			element.checked = newValue == element.value
 			break
 		case 'text':
-			if (typeof newValue == 'string') {
-				element.value = newValue
-				break
-			}
-			console.warn('Unexpected type for input type=string', newValue)
+			if (typeof newValue != 'string') return console.warn('Unexpected type for input type=string', newValue)
+
+			element.value = newValue
+			break
 		default:
 			element.value = String(newValue)
 	}
@@ -276,10 +303,8 @@ export class DynamicFragment {
 	 **/
 	#attributeLocators = null
 
-	/** @type {TemplateStringsArray} */
 	strings
 
-	/** @type {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} */
 	#values
 
 	/** @type {unknown} */
@@ -287,7 +312,7 @@ export class DynamicFragment {
 
 	/**
 	 * @param {TemplateStringsArray} strings
-	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
+	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|object|null|undefined)[]} values
 	 */
 	constructor(strings, values) {
 		this.strings = strings
@@ -383,8 +408,8 @@ export class DynamicFragment {
 				}
 
 				if (attribute == sharedStateAttributeName) {
-					if (!isTwowayBinding(value)) {
-						throw new Error(`${sharedStateAttributeName} must use a two way binding (get and set function)`)
+					if (!isTwowayBinding(value) && !(typeof value == 'object' && value != null)) {
+						throw new Error(`${sharedStateAttributeName} must use a two way binding (get and set function), or a compatible object`)
 					}
 
 					htmlResult += part.slice(0, -attributeMatch[0].length)
@@ -466,7 +491,7 @@ export class DynamicFragment {
 			// Treat as dynamic content
 			htmlResult += part
 
-			const isArray = value instanceof Array
+			const isArray = Array.isArray(value)
 
 			// insert a comment to track position to enter content
 			htmlResult += `<!-- ${isArray ? arrayContentCommentPrefix : contentCommentPrefix}${indexPathPrefix}${index} -->`
@@ -539,14 +564,14 @@ export class DynamicFragment {
 			if (locator.type == 'sharedState') {
 				const binding = this.values[locator.index]
 
-				if (!isTwowayBinding(binding)) {
+				if (!isTwowayBinding(binding) && !(typeof binding == 'object' && binding != null)) {
 					throw new Error('Must use two way binding with sharedState')
 				}
 
 
 				if (elementIsNativeControlElement(element)) {
 					element.addEventListener('input', (event) => this.#handleNativeInputEvent(locator, element, event))
-					updateNativeElement(element, binding.get())
+					updateNativeElement(element, getFromBinding(binding))
 				} else if (elementIsTwoWayBindable(element)) {
 					element.sharedStateBinding = binding
 				} else if (customElements.get(element.localName)) {
@@ -619,60 +644,101 @@ export class DynamicFragment {
 
 		const binding = this.values[locator.index]
 
-		if (!isTwowayBinding(binding)) throw new Error('Invalid shared state binding')
-
 		if (element instanceof HTMLSelectElement) {
 			if (element.type == 'select-multiple') {
-				const selected = []
-				for (const option of element.selectedOptions) {
-					selected.push(option.value)
-				}
-				binding.set(selected, event)
-			} else {
-				binding.set(element.value, event)
-			}
+				if (isTwowayBinding(binding)) {
+					const selected = []
+					for (const option of element.selectedOptions) {
+						selected.push(option.value)
+					}
+					binding.set(selected, event)
+				} else if (isArrayOfStrings(binding)) {
+
+					const selectedOptions = [...element.selectedOptions].map(option => option.value)
+					// remove values no longer selected
+					for (let index = binding.length - 1; index >= 0; index--) {
+						if (!selectedOptions.includes(binding[index])) {
+							binding.splice(index, 1)
+						}
+					}
+					// add options previously not selected
+					selectedOptions.forEach(option => {
+						if (!binding.includes(option)) {
+							binding.push(option)
+						}
+					})
+				} else throw new Error('Invalid shared state binding')
+
+			} else setToBindingOrThrow(binding, element.value, event)
 			return
 		}
 
 		if (element instanceof HTMLTextAreaElement) {
-			binding.set(element.value, event)
-			return
+			return setToBindingOrThrow(binding, element.value, event)
 		}
 
 		switch (element.type) {
 			case 'checkbox':
-				const valueBefore = binding.get()
-				if (valueBefore instanceof Set) {
-					const newSet = new Set(valueBefore)
-					element.checked ?
-						newSet.add(element.name) :
-						newSet.delete(element.name)
-					return binding.set(newSet, event)
-				}
-				if (valueBefore instanceof Array) {
-					const indexBefore = valueBefore.indexOf(element.name)
-					const newArrayValue = element.checked ?
-						valueBefore.concat(element.name) :
-						valueBefore.toSpliced(indexBefore, 1)
-					return binding.set(newArrayValue, event)
-				}
-				binding.set(element.checked, event)
+				if (isTwowayBinding(binding)) { // Update the binding
+					const valueBefore = binding.get()
+					if (valueBefore instanceof Set) {
+						const newSet = new Set(valueBefore)
+						element.checked ?
+							newSet.add(element.name) :
+							newSet.delete(element.name)
+						return binding.set(newSet, event)
+					}
+					if (valueBefore instanceof Array) {
+						const indexBefore = valueBefore.indexOf(element.name)
+						const newArrayValue = element.checked ?
+							valueBefore.concat(element.name) :
+							valueBefore.toSpliced(indexBefore, 1)
+						return binding.set(newArrayValue, event)
+					}
+					binding.set(element.checked, event)
+
+				} else if (binding instanceof Set) {
+					// mutate the set directly
+					element.checked ? binding.add(element.name) : binding.delete(element.name)
+				} else if (isArrayOfStrings(binding)) {
+					if (element.checked && !binding.includes(element.name)) binding.push(element.name)
+
+					if (!element.checked && binding.includes(element.name)) binding.splice(binding.indexOf(element.name), 1)
+
+				} else throw new Error('Invalid state binding for checkbox')
 				break
 			case 'number':
 			case 'range':
-				binding.set(element.valueAsNumber, event)
-				break
+				return setToBindingOrThrow(binding, element.valueAsNumber, event)
 			case 'datetime-local':
 				const newValue = new Date(element.value)
-				binding.set(newValue, event)
+
+				if (isTwowayBinding(binding)) {
+					binding.set(newValue)
+				} else if (binding instanceof Date) {
+					const timestamp = newValue.getTime()
+					if (timestamp)
+						binding.setTime(timestamp)
+					else
+						console.warn('Invalid date value for datetime input')
+				} else throw new Error('Invalid state binding for datetime-local input')
 				break
 			case 'date':
 			case 'month':
 			case 'week':
-				binding.set(element.valueAsDate, event)
+				if (isTwowayBinding(binding)) {
+					binding.set(element.valueAsDate, event)
+				} else if (binding instanceof Date) {
+					const newDateValue = element.valueAsDate?.getTime()
+					if (newDateValue) {
+						binding.setTime(newDateValue)
+					} else {
+						console.warn('Invalid date value for date input')
+					}
+				} else throw new Error('Invalid state binding for Date input')
 				break
 			default:
-				binding.set(element.value)
+				setToBindingOrThrow(binding, element.value, event)
 		}
 	}
 
@@ -913,10 +979,10 @@ export class DynamicFragment {
 			switch (dynamicNode?.type) {
 				case 'sharedState':
 
-					if (!isTwowayBinding(value)) throw new Error('Muse use two way binding')
+					if (typeof value != 'object' || value == null) throw new Error('invalid value for shared state')
 
 					if (elementIsNativeControlElement(dynamicNode.node)) {
-						updateNativeElement(dynamicNode.node, value.get())
+						updateNativeElement(dynamicNode.node, getFromBinding(value))
 					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
 						dynamicNode.node.sharedStateBinding = value
 					}
@@ -968,6 +1034,10 @@ export class DynamicFragment {
 					if (Array.isArray(previousValue)) {
 						if (Array.isArray(value)) { // array => array
 
+							if (value.some((value, index) => value == previousValue[index])) {
+								console.warn('Detected identical item in array. Please recreate dynamic fragments for every list rendering')
+								return value
+							}
 
 							if (value.length && previousValue.length &&
 								previousValue.every(fragment => fragment.#key) &&
