@@ -160,7 +160,12 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		}
 	}
 
-	attributeChangedCallback() {
+	/**
+	 * @param {string} attributeName
+	 * @param {string} oldValue
+	 * @param {string} newValue
+	 */
+	attributeChangedCallback(attributeName, oldValue, newValue) {
 		if (this.isMounted) {
 			this.invalidate()
 		}

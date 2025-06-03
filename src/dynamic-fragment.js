@@ -407,12 +407,16 @@ export class DynamicFragment {
 					}
 				}
 
+				// add the content up to the attribute
+				htmlResult += part.slice(0, -attributeMatch[0].length)
+
 				if (attribute == sharedStateAttributeName) {
+					if (prefix || suffix) {
+						throw new Error(`${sharedStateAttributeName} can not have prefix/suffix`)
+					}
 					if (!isTwowayBinding(value) && !(typeof value == 'object' && value != null)) {
 						throw new Error(`${sharedStateAttributeName} must use a two way binding (get and set function), or a compatible object`)
 					}
-
-					htmlResult += part.slice(0, -attributeMatch[0].length)
 
 					const dataAttributeValue = indexPathPrefix + index
 
@@ -425,8 +429,10 @@ export class DynamicFragment {
 					if (typeof value != 'function') {
 						throw new Error('Only functions are supported as event handlers')
 					}
+					if (prefix || suffix) {
+						throw new Error('Event handler attributes can not have prefix/suffix')
+					}
 					const eventName = attribute.slice(2)
-					htmlResult += part.slice(0, -attributeMatch[0].length)
 
 					const dataAttributeValue = indexPathPrefix + index
 
@@ -435,8 +441,6 @@ export class DynamicFragment {
 					return
 				}
 
-				// add the content up to the attribute
-				htmlResult += part.slice(0, -attributeMatch[0].length)
 
 				if (typeof value == 'boolean') {
 					if (prefix || suffix) {
