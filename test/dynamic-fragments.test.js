@@ -3,6 +3,13 @@ import { html, innerHTML, twoway } from '../src/dynamic-fragment.js'
 import expect from '@applicvision/js-toolbox/expect'
 import { addTestContainer, property } from './helpers.js'
 
+/**
+ * @param {string} text
+ */
+function normalizeMarkupText(text) {
+	return text.replaceAll(/\s+/g, ' ').trim()
+}
+
 describe('Dynamic fragments', () => {
 
 	/** @type {HTMLElement} */
@@ -551,5 +558,31 @@ describe('Dynamic fragments', () => {
 		expect(input?.value).to.equal('new value')
 
 		expect(state.value).to.equal('new value')
+	})
+
+	it('Static string', () => {
+		const arrayOfFragments = ['one', 'two', 'three'].map(content => html`<p>${content}</p>`)
+		const subFragment = html`<h2 hidden=${true}>Inner</h2>`
+		const fragment = html`
+			<h1 hidden=${false}>Outer</h1>
+			${subFragment}
+			<section>
+				<h3>${'List'}</h3>
+				${arrayOfFragments}
+			</section>
+		`
+		testContainer.innerHTML = fragment.staticHtmlString
+
+		expect(normalizeMarkupText(fragment.staticHtmlString)).to.equal(normalizeMarkupText(`
+		<h1>Outer</h1>
+		<h2 hidden>Inner</h2>
+		<section>
+			<h3>List</h3>
+			<p>one</p>
+			<p>two</p>
+			<p>three</p>
+		</section>
+		 `))
+
 	})
 })
