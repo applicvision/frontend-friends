@@ -377,7 +377,7 @@ export class DynamicFragment {
 
 			/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
 			// @ts-ignore
-			const attributeMatch = typeof part == 'string' && part.match(attributeRegex)
+			const attributeMatch = part.match(attributeRegex)
 
 
 			/** @type {string|undefined} */
@@ -1298,5 +1298,47 @@ export class DynamicFragment {
 
 	toString() {
 		return this.#getHtmlString()
+	}
+
+	/** @type {string} */
+	get staticHtmlString() {
+
+		return this.strings.reduce((total, nextStringLiteral, index) => {
+
+			const value = index < this.values.length ? this.values[index] : ''
+
+			if (Array.isArray(value)) {
+				return total + nextStringLiteral + value.map((/** @type {unknown} */item) => {
+					if (item instanceof DynamicFragment) {
+						return item.staticHtmlString
+					}
+					console.warn('Unexpected array item when creating static html string', item)
+					return `${item}`
+				}).join('\n')
+			}
+			if (value instanceof DynamicFragment) {
+				return total + nextStringLiteral + value.staticHtmlString
+			}
+
+			if (typeof value == 'string' || typeof value == 'number') {
+				return total + nextStringLiteral + value
+			}
+
+			if (typeof value == 'boolean') {
+				/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
+				// @ts-expect-error
+				const attributeMatch = nextStringLiteral.match(attributeRegex)
+				if (attributeMatch && !attributeMatch.groups.quotemark && !attributeMatch.groups.prefix) {
+					return total + nextStringLiteral.slice(0, value ? -1 : -(2 + attributeMatch.groups.attribute.length))
+				}
+
+			}
+
+			console.warn('Unexpected value skipped when building static html string: ', value, 'Last string:', nextStringLiteral)
+			return total + nextStringLiteral
+
+		}, '')
+
+
 	}
 }
