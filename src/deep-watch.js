@@ -32,6 +32,15 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 			}
 		})
 	}
+	if (blueprint instanceof URL) {
+		// @ts-ignore
+		return urlProxy(blueprint, url => modificationCallback(keyPath, url))
+	}
+
+	if (blueprint instanceof URLSearchParams) {
+		// @ts-ignore
+		return searchParamsProxy(blueprint, params => modificationCallback(keyPath, params))
+	}
 
 	return new Proxy(blueprint, {
 		get(target, property, reciever) {
@@ -241,4 +250,64 @@ class DateProxy extends Date {
 				}
 			})
 	}
+}
+
+/**
+ * @param {URL} url
+ * @param {(value: URL) => void} callback
+ */
+function urlProxy(url, callback) {
+	return new Proxy(url, {
+		set(target, property, value) {
+			const result = Reflect.set(target, property, value)
+			callback(target)
+			return result
+		},
+		/** @param {keyof URL} property */
+		get(target, property) {
+			if (property == 'searchParams') {
+				return searchParamsProxy(target.searchParams, () => callback(target))
+			}
+			return target[property]
+		}
+	})
+}
+
+/**
+ * @param {URLSearchParams} searchParams
+ * @param {(value: searchParams) => void} callback
+ */
+function searchParamsProxy(searchParams, callback) {
+	const nodeInspectSymbol = Symbol.for('nodejs.util.inspect.custom')
+	/** @type {Function|undefined} */
+	// @ts-ignore
+	const protoMethod = URLSearchParams.prototype[nodeInspectSymbol]
+	if (protoMethod) {
+		// @ts-ignore
+		searchParams[nodeInspectSymbol] = (/** @type {any[]} */...args) => {
+			return protoMethod.apply(searchParams, args)
+		}
+	}
+
+	return new Proxy(searchParams, {
+		/** @param {keyof URLSearchParams} property */
+		get(target, property, reciever) {
+			switch (property) {
+				case 'append':
+				case 'set':
+				case 'sort':
+				case 'delete': return function proxiedMutation(/** @type {any[]} */...args) {
+					const returnValue = URLSearchParams.prototype[property].apply(target, args)
+					callback(target)
+					return returnValue
+				}
+				default:
+					const value = Reflect.get(target, property, reciever)
+					if (typeof value == 'function') {
+						return value.bind(target)
+					}
+					return value
+			}
+		}
+	})
 }

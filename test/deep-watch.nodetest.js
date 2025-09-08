@@ -109,6 +109,10 @@ describe('Deep watch', () => {
 
 			/** @type {{[key: string]: string}} */
 			attributes = {}
+
+			modifier() {
+				this.name = 'modified-test'
+			}
 		}
 
 		const spy = mock.fn()
@@ -127,6 +131,10 @@ describe('Deep watch', () => {
 		watched.attributes['test'] = 'value'
 		assert.equal(spy.mock.callCount(), 4)
 		assert.deepEqual(spy.mock.calls.at(-1)?.arguments[0], ['attributes', 'test'])
+
+		watched.modifier()
+		assert.equal(watched.name, 'modified-test')
+		assert.equal(spy.mock.callCount(), 5)
 
 		spy.mock.resetCalls()
 		const watched2 = deepWatch({ inner: new DemoClass() }, spy)
@@ -242,5 +250,43 @@ describe('Deep watch', () => {
 		assert.equal(watchedNested.date.getFullYear(), 2020)
 		assert.equal(spy.mock.callCount(), 1)
 		assert.deepEqual(spy.mock.calls[0].arguments, [['date'], anotherDate])
+	})
+
+	it('Should watch URLs and URLSearchParams', () => {
+		const spy = mock.fn()
+
+		const url = new URL('http://test.com')
+
+		const watched = deepWatch({ theUrl: url }, spy)
+
+		assert(watched.theUrl instanceof URL)
+
+		watched.theUrl.protocol = 'https'
+		assert.equal(watched.theUrl.protocol, 'https:')
+
+		assert.equal(spy.mock.callCount(), 1)
+		assert.deepEqual(spy.mock.calls[0].arguments, [['theUrl'], url])
+
+		watched.theUrl.hash = 'fragment'
+		assert.equal(spy.mock.callCount(), 2)
+
+		watched.theUrl.searchParams.append('filter', 'value')
+		assert.equal(spy.mock.callCount(), 3)
+
+		assert.equal(watched.theUrl.href, 'https://test.com/?filter=value#fragment')
+
+
+		const searchParamsSpy = mock.fn()
+		const params = deepWatch(new URLSearchParams('initial=value'), searchParamsSpy)
+
+		params.append('search', 'test')
+		params.append('order', 'asc')
+
+		assert.equal(params.toString(), 'initial=value&search=test&order=asc')
+		assert.equal(searchParamsSpy.mock.callCount(), 2)
+
+		params.sort()
+		assert.equal(searchParamsSpy.mock.callCount(), 3)
+		assert.equal(params.toString(), 'initial=value&order=asc&search=test')
 	})
 })
