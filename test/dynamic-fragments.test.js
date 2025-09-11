@@ -1,5 +1,5 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html, innerHTML, twoway } from '../src/dynamic-fragment.js'
+import { html, innerHTML, svg, twoway } from '../src/dynamic-fragment.js'
 import expect from '@applicvision/js-toolbox/expect'
 import { addTestContainer, property } from './helpers.js'
 
@@ -49,6 +49,27 @@ describe('Dynamic fragments', () => {
 		fragment.values = ['test2']
 
 		expect(testContainer.firstElementChild?.className).to.equal('test2')
+	})
+
+	it('Attributes with numbers', () => {
+		const fragment = html`<svg width=100 height=100>
+			<line x1=${5} x2=${50} y1=${20} y2=${20} stroke="black" stroke-width=5 />
+		</svg>`
+		fragment.mount(testContainer)
+
+		const line = testContainer.querySelector('line')
+
+		expect(line?.x1.baseVal.value).to.equal(5)
+		expect(line?.x2.baseVal.value).to.equal(50)
+		expect(line?.y1.baseVal.value).to.equal(20)
+		expect(line?.y2.baseVal.value).to.equal(20)
+
+		fragment.values = [20, 20, 10, 30]
+
+		expect(line?.x1.baseVal.value).to.equal(20)
+		expect(line?.x2.baseVal.value).to.equal(20)
+		expect(line?.y1.baseVal.value).to.equal(10)
+		expect(line?.y2.baseVal.value).to.equal(30)
 	})
 
 	it('content which looks like attributes', () => {
@@ -452,6 +473,60 @@ describe('Dynamic fragments', () => {
 
 		fragment.values = [getEntries()]
 		expect(testContainer.innerText).to.equal('inserted\nupdate test 1\ntest 2\ntest 3')
+	})
+
+	it('svg content', () => {
+		const fragment = html`
+		<div>Some svg:</div>
+		<svg width=100 height=100 style="border:1px solid black">
+			<circle cx=50 cy=50 r=${10}></circle>
+		</svg>`
+
+		fragment.mount(testContainer)
+
+		const circle = testContainer.querySelector('circle')
+		expect(circle?.cx.baseVal.value).to.equal(50)
+		expect(circle?.r.baseVal.value).to.equal(10)
+
+		fragment.values = [20]
+
+		expect(circle?.r.baseVal.value).to.equal(20)
+	})
+
+	it('svg fragments', () => {
+		const getCircle = (rad = 10) => svg`<circle cx=50 cy=50 r=${rad}></circle>`
+		const getRect = () => svg`<rect x=30 y=20 width=30 height=10></rect>`
+		const fragment = html`<svg width=100 height=100>${getCircle()}</svg>`
+		fragment.mount(testContainer)
+		const circle = testContainer.querySelector('circle')
+		expect(circle?.r.baseVal.value).to.equal(10)
+
+		fragment.values = [getRect()]
+		const rect = testContainer.querySelector('rect')
+		expect(rect?.width.baseVal.value).to.equal(30)
+		expect(rect?.isConnected)
+		expect(circle?.isConnected).to.be.false()
+
+		fragment.values = [getCircle(20)]
+		expect(circle?.r.baseVal.value).to.equal(20)
+		expect(circle?.isConnected)
+	})
+
+	it('svg array', () => {
+
+		const getList = (length = 3) => Array.from({ length }, (_, index) => svg.key(index)
+			`<line x1=${10} x2=${20 + 20 * index} y1=${15 * (1 + index)} y2=${15 * (1 + index)} stroke="black" stroke-width=5 />`)
+		const fragment = html`<svg width=100 height=100>${getList(3)}</svg>`
+		fragment.mount(testContainer)
+
+		let firstLine = testContainer.querySelector('line')
+		expect(firstLine instanceof SVGLineElement)
+		fragment.values = [getList(4)]
+		fragment.values = [getList(2)]
+		fragment.values = [getList(5)]
+
+		firstLine = testContainer.querySelector('line')
+		expect(firstLine instanceof SVGLineElement)
 	})
 
 	it('switch between array and content', () => {
