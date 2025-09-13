@@ -1,5 +1,5 @@
-const attributeRegex = /(?<attribute>[a-zA-Z-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
-const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z-]+(=|(="[^"]*")|(='[^']*')|(=[^'"\s]+))?\s+)*$/
+const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(="[^"]*")|(='[^']*')|(=[^'"\s]+))?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
@@ -69,12 +69,22 @@ export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
 }
 
-html.key = (/** @type {string | number} */ key) =>
+/**
+ * @param {TemplateStringsArray} strings
+ * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|object|null|undefined)[]} values
+ */
+export function svg(strings, ...values) {
+	return new DynamicFragment(strings, values, true)
+}
+
+html.key = svg.key = function (/** @type {string | number} */ key) {
 	/**
 	* @param {TemplateStringsArray} strings
 	* @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|null|undefined)[]} values
 	*/
-	(strings, ...values) => new DynamicFragment(strings, values).key(key)
+	return (strings, ...values) => this(strings, ...values).key(key)
+}
+
 
 /** @type {(element: Element) => element is CustomTwowayBindable} */
 function elementIsTwoWayBindable(element) {
@@ -307,6 +317,8 @@ export class DynamicFragment {
 
 	#values
 
+	#isSvg = false
+
 	/** @type {unknown} */
 	#eventHandlerContext
 
@@ -314,9 +326,10 @@ export class DynamicFragment {
 	 * @param {TemplateStringsArray} strings
 	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|TwowayBinding|object|null|undefined)[]} values
 	 */
-	constructor(strings, values) {
+	constructor(strings, values, isSvg = false) {
 		this.strings = strings
 		this.#values = values
+		this.#isSvg = isSvg
 	}
 
 
@@ -625,7 +638,7 @@ export class DynamicFragment {
 		/** @type {Element?} */
 		let element = null
 
-		const elementNodes = this.#nodes.filter(node => node instanceof HTMLElement)
+		const elementNodes = this.#nodes.filter(node => node instanceof Element)
 		if (elementNodes.length == 1) {
 			const onlyElement = elementNodes[0]
 			element = onlyElement.getAttribute(dataAttribute) == locator.dataAttributeValue ?
@@ -897,7 +910,7 @@ export class DynamicFragment {
 		if (!fragment.#nodes) throw new Error('Can not add something that has no nodes')
 
 		const lastNode = this.#nodes.at(-1)
-		if (lastNode instanceof CharacterData || lastNode instanceof HTMLElement) {
+		if (lastNode instanceof CharacterData || lastNode instanceof Element) {
 			lastNode.after(...fragment.#nodes)
 		} else {
 			throw new Error(`Unexpected node type: ${lastNode}`)
@@ -908,11 +921,21 @@ export class DynamicFragment {
 	 * @param {unknown=} eventHandlerContext
 	 */
 	#buildFragment(eventHandlerContext) {
-		const template = document.createElement('template')
-		template.innerHTML = this.#getHtmlString()
+		/** @type {DocumentFragment} */
+		let fragment
+		if (this.#isSvg) {
+			const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+			wrapper.innerHTML = this.#getHtmlString()
+			fragment = document.createDocumentFragment()
+			fragment.append(...wrapper.childNodes)
+		} else {
+			const template = document.createElement('template')
+			template.innerHTML = this.#getHtmlString()
+			fragment = template.content
+		}
 
-		this.hydrate(template.content, eventHandlerContext)
-		return template.content
+		this.hydrate(fragment, eventHandlerContext)
+		return fragment
 	}
 
 	/** 
