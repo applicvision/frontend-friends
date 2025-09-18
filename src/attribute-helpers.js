@@ -62,6 +62,9 @@ class Twoway {
 	/** @type {((newValue: TransformedType) => void)?} */
 	#effect = null
 
+	/** @type {unknown} */
+	#effectContext = null
+
 	/** @type {((fieldValue: TransformedType) => ValueType)?} */
 	#toTransform = null
 
@@ -73,12 +76,14 @@ class Twoway {
 	 * @param {string | number | symbol} property
 	 * @param {((value: TransformedType) => ValueType)?} [toTransform]
 	 * @param {((value: ValueType) => TransformedType)?} [fromTransform]
+	 * @param {unknown} [effectContext]
 	 */
-	constructor(state, property, toTransform = null, fromTransform = null) {
+	constructor(state, property, toTransform = null, fromTransform = null, effectContext = null) {
 		this.#stateContainer = state
 		this.#property = property
 		this.#toTransform = toTransform
 		this.#fromTransform = fromTransform
+		this.#effectContext = effectContext
 	}
 
 	/** @returns {TransformedType} */
@@ -90,7 +95,7 @@ class Twoway {
 	/** @param {TransformedType} newValue */
 	set(newValue) {
 		this.#stateContainer[this.#property] = this.#toTransform ? this.#toTransform(newValue) : newValue
-		this.#effect?.call(null, newValue)
+		this.#effect?.call(this.#effectContext, newValue)
 	}
 
 	/** @param {(newValue: TransformedType) => void} effect */
@@ -108,8 +113,9 @@ class Twoway {
  * @param {Key} property
  * @param {((fieldValue: TransformedType) => T[Key])} [toTransform]
  * @param {((stateValue: T[Key]) => TransformedType)} [fromTransform]
+ * @param {unknown} [effectContext]
  * @returns {Twoway<T[Key], TransformedType>}
  */
-export function twoway(state, property, toTransform, fromTransform) {
-	return new Twoway(state, property, toTransform, fromTransform)
+export function twoway(state, property, toTransform, fromTransform, effectContext) {
+	return new Twoway(state, property, toTransform, fromTransform, effectContext)
 }

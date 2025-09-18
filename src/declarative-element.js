@@ -1,4 +1,5 @@
-import { DynamicFragment, html } from '@applicvision/frontend-friends/dynamic-fragment'
+import { twoway, html } from '@applicvision/frontend-friends'
+import { DynamicFragment } from '@applicvision/frontend-friends/dynamic-fragment'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
@@ -171,6 +172,14 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		}
 	}
 
+	/**
+	 * @protected
+	 * @type {typeof twoway}
+	 */
+	twoway(state, property, toTransform, fromTransform) {
+		return twoway(state, property, toTransform, fromTransform, this)
+	}
+
 	/** 
 	 * Implement this function to generate content for your component
 	 * @protected
@@ -180,6 +189,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	/**
+	 * @protected
 	 * @template {object} T
 	 * @param {T} object
 	 * @param {(keypath: (string|symbol)[], newValue: unknown, oldValue: unknown) => void} effect
