@@ -877,7 +877,7 @@ export class DynamicFragment {
 
 	#unmount() {
 		if (!this.#nodes) return
-		const parent = this.#nodes[0]?.parentElement
+		const parent = this.#nodes[0]?.parentNode
 		for (const node of this.#nodes) {
 			parent?.removeChild(node)
 		}
@@ -991,6 +991,18 @@ export class DynamicFragment {
 
 		this.#values = newValues.map((value, index) => {
 			const previousValue = this.values[index]
+			const dynamicNode = this.#dynamicNodes[index]
+
+			// Handle shared state before change guard
+			if (dynamicNode.type == 'sharedState') {
+				if (typeof value != 'object' || value == null) throw new Error('invalid value for shared state')
+				if (elementIsNativeControlElement(dynamicNode.node)) {
+					updateNativeElement(dynamicNode.node, getFromBinding(value))
+				} else if (elementIsTwoWayBindable(dynamicNode.node)) {
+					dynamicNode.node.sharedStateBinding = value
+				}
+				return value
+			}
 
 			if (value == previousValue) {
 				return value
@@ -1001,20 +1013,8 @@ export class DynamicFragment {
 				return value
 			}
 
-			const dynamicNode = this.#dynamicNodes[index]
 
 			switch (dynamicNode?.type) {
-				case 'sharedState':
-
-					if (typeof value != 'object' || value == null) throw new Error('invalid value for shared state')
-
-					if (elementIsNativeControlElement(dynamicNode.node)) {
-						updateNativeElement(dynamicNode.node, getFromBinding(value))
-					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
-						dynamicNode.node.sharedStateBinding = value
-					}
-					return value
-
 				case 'attribute':
 					if (typeof value == 'boolean') {
 						this.#updateBooleanAttribute(dynamicNode, value)
