@@ -2,22 +2,9 @@ import { before, describe, it } from '@applicvision/js-toolbox/test'
 import expect from '@applicvision/js-toolbox/expect'
 import { DeclarativeElement } from '../src/declarative-element.js'
 import { html, twoway } from '../src/dynamic-fragment.js'
-import { addTestContainer } from './helpers.js'
+import { addTestContainer, normalizeMarkupText, shadowText } from './helpers.js'
 import { island } from '../src/dynamic-island.js'
 
-/**
- * @param {HTMLElement} element
- */
-function shadowText(element) {
-	return normalizeMarkupText(element.shadowRoot?.textContent ?? '')
-}
-
-/**
- * @param {string} text
- */
-function normalizeMarkupText(text) {
-	return text.replaceAll(/\s+/g, ' ').trim()
-}
 
 /**
  * @param {HTMLElement} element
@@ -53,11 +40,6 @@ describe('Stateful component', () => {
 
 	class Alternating extends DeclarativeElement {
 		state = this.reactive({ loading: true })
-
-		// Expose the protected method
-		sharedStateChanged() {
-			super.sharedStateChanged()
-		}
 
 		render() {
 			if (this.state.loading) {

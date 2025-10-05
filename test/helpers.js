@@ -26,3 +26,17 @@ export function addTestContainer(id = 'elements-render-here') {
 export function property(key, value) {
 	return new PropertySetter(key, value)
 }
+
+/**
+ * @param {string} text
+ */
+export function normalizeMarkupText(text) {
+	return text.replaceAll(/\s+/g, ' ').trim()
+}
+
+/**
+ * @param {HTMLElement} element
+ */
+export function shadowText(element) {
+	return normalizeMarkupText(element.shadowRoot?.textContent ?? '')
+}
