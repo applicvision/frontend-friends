@@ -635,6 +635,60 @@ describe('Dynamic fragments', () => {
 		expect(state.value).to.equal('new value')
 	})
 
+	it('Shared state, object binding', async () => {
+		const state = ['a', 'b', 'other']
+
+		const fragment = html`
+		<form>
+			<label><input type="checkbox" name="checks" value="a" ff-share=${state}>A</label>
+			<label><input type="checkbox" name="checks" value="b" ff-share=${state}>B</label>
+			<label><input type="checkbox" name="checks" value="c" ff-share=${state}>C</label>
+			<label><input type="checkbox" name="other" ff-share=${state}>Other</label>
+		</form>
+		`
+		fragment.mount(testContainer)
+
+		/** @type {HTMLInputElement[]} */
+		const [aInput, bInput, cInput] = testContainer.querySelector('form')?.checks
+
+		/** @type {HTMLInputElement} */
+		const otherInput = testContainer.querySelector('form')?.other
+
+		expect(aInput.checked).to.be.true()
+		expect(bInput.checked).to.be.true()
+		expect(cInput.checked).to.be.false()
+		expect(otherInput.checked).to.be.true()
+
+		let formData = new FormData(testContainer.querySelector('form') ?? undefined)
+		expect(formData.getAll('checks')).to.deepEqual(['a', 'b'])
+		expect(formData.get('other')).to.equal('on')
+
+		// user interaction
+		bInput.checked = false
+		bInput?.dispatchEvent(new Event('input'))
+
+		cInput.checked = true
+		cInput?.dispatchEvent(new Event('input'))
+
+
+		formData = new FormData(testContainer.querySelector('form') ?? undefined)
+		expect(formData.getAll('checks')).to.deepEqual(['a', 'c'])
+		expect(formData.get('other')).to.equal('on')
+
+		expect(state).to.deepEqual(['a', 'other', 'c'])
+
+		// programmatic updates
+		state.splice(state.indexOf('other'), 1)
+
+		expect(state).to.deepEqual(['a', 'c'])
+		fragment.values = [state, state, state, state]
+
+		formData = new FormData(testContainer.querySelector('form') ?? undefined)
+		expect(formData.getAll('checks')).to.deepEqual(['a', 'c'])
+
+		expect(otherInput.checked).to.be.false()
+	})
+
 	it('Static string', () => {
 		const arrayOfFragments = ['one', 'two', 'three'].map(content => html`<p>${content}</p>`)
 		const subFragment = html`<h2 hidden=${true}>Inner</h2>`

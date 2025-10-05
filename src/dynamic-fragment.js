@@ -276,12 +276,13 @@ function updateNativeElement(element, newValue) {
 			}
 			break
 		case 'checkbox':
+			const elementCheckedValue = element.value && element.value != 'on' ? element.value : element.name
 			if (typeof newValue == 'boolean') {
 				element.checked = newValue
 			} else if (newValue instanceof Set) {
-				element.checked = newValue.has(element.name)
+				element.checked = newValue.has(elementCheckedValue)
 			} else if (Array.isArray(newValue)) {
-				element.checked = newValue.includes(element.name)
+				element.checked = newValue.includes(elementCheckedValue)
 			} else {
 				console.warn('Unexpected type for checkbox input', newValue)
 			}
@@ -696,19 +697,20 @@ export class DynamicFragment {
 
 		switch (element.type) {
 			case 'checkbox':
+				const elementCheckedValue = element.value && element.value != 'on' ? element.value : element.name
 				if (isTwowayBinding(binding)) { // Update the binding
 					const valueBefore = binding.get()
 					if (valueBefore instanceof Set) {
 						const newSet = new Set(valueBefore)
 						element.checked ?
-							newSet.add(element.name) :
-							newSet.delete(element.name)
+							newSet.add(elementCheckedValue) :
+							newSet.delete(elementCheckedValue)
 						return binding.set(newSet, event)
 					}
 					if (valueBefore instanceof Array) {
-						const indexBefore = valueBefore.indexOf(element.name)
+						const indexBefore = valueBefore.indexOf(elementCheckedValue)
 						const newArrayValue = element.checked ?
-							valueBefore.concat(element.name) :
+							valueBefore.concat(elementCheckedValue) :
 							valueBefore.toSpliced(indexBefore, 1)
 						return binding.set(newArrayValue, event)
 					}
@@ -716,11 +718,13 @@ export class DynamicFragment {
 
 				} else if (binding instanceof Set) {
 					// mutate the set directly
-					element.checked ? binding.add(element.name) : binding.delete(element.name)
+					element.checked ? binding.add(elementCheckedValue) : binding.delete(elementCheckedValue)
 				} else if (isArrayOfStrings(binding)) {
-					if (element.checked && !binding.includes(element.name)) binding.push(element.name)
+					if (element.checked && !binding.includes(elementCheckedValue))
+						binding.push(elementCheckedValue)
 
-					if (!element.checked && binding.includes(element.name)) binding.splice(binding.indexOf(element.name), 1)
+					if (!element.checked && binding.includes(elementCheckedValue))
+						binding.splice(binding.indexOf(elementCheckedValue), 1)
 
 				} else throw new Error('Invalid state binding for checkbox')
 				break
@@ -877,7 +881,7 @@ export class DynamicFragment {
 
 	#unmount() {
 		if (!this.#nodes) return
-		const parent = this.#nodes[0]?.parentElement
+		const parent = this.#nodes[0]?.parentNode
 		for (const node of this.#nodes) {
 			parent?.removeChild(node)
 		}
@@ -991,6 +995,18 @@ export class DynamicFragment {
 
 		this.#values = newValues.map((value, index) => {
 			const previousValue = this.values[index]
+			const dynamicNode = this.#dynamicNodes[index]
+
+			// Handle shared state before change guard
+			if (dynamicNode.type == 'sharedState') {
+				if (typeof value != 'object' || value == null) throw new Error('invalid value for shared state')
+				if (elementIsNativeControlElement(dynamicNode.node)) {
+					updateNativeElement(dynamicNode.node, getFromBinding(value))
+				} else if (elementIsTwoWayBindable(dynamicNode.node)) {
+					dynamicNode.node.sharedStateBinding = value
+				}
+				return value
+			}
 
 			if (value == previousValue) {
 				return value
@@ -1001,20 +1017,8 @@ export class DynamicFragment {
 				return value
 			}
 
-			const dynamicNode = this.#dynamicNodes[index]
 
 			switch (dynamicNode?.type) {
-				case 'sharedState':
-
-					if (typeof value != 'object' || value == null) throw new Error('invalid value for shared state')
-
-					if (elementIsNativeControlElement(dynamicNode.node)) {
-						updateNativeElement(dynamicNode.node, getFromBinding(value))
-					} else if (elementIsTwoWayBindable(dynamicNode.node)) {
-						dynamicNode.node.sharedStateBinding = value
-					}
-					return value
-
 				case 'attribute':
 					if (typeof value == 'boolean') {
 						this.#updateBooleanAttribute(dynamicNode, value)

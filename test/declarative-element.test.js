@@ -3,13 +3,8 @@ import expect from '@applicvision/js-toolbox/expect'
 import { spy } from '@applicvision/js-toolbox/function-spy'
 import { DeclarativeElement, css, innerCSS } from '../src/declarative-element.js'
 import { html } from '../src/dynamic-fragment.js'
-import { addTestContainer } from './helpers.js'
+import { addTestContainer, shadowText } from './helpers.js'
 
-
-/** @param {HTMLElement} element */
-function shadowText(element) {
-	return element.shadowRoot?.textContent ?? ''
-}
 
 /**
  * @param {HTMLElement} element
@@ -55,9 +50,55 @@ describe('Declarative Element component', () => {
 		}
 	}
 
+
+	class TopLevelDynamic extends DeclarativeElement {
+		state = this.reactive({ active: false })
+		render() {
+			return html`
+			${this.state.active ?
+					html`<button onclick=${() => this.state.active = false}>off</button>` :
+					html`<button onclick=${() => this.state.active = true}>on</button>`
+				}
+			`
+		}
+	}
+
+	/** @extends {DeclarativeElement<boolean>} */
+	class ReactiveArrayElement extends DeclarativeElement {
+
+		static sharedStateName = 'active'
+
+		state = this.reactive(['a'])
+
+		/**
+		 * @param {string} value
+		 */
+		addToState(value) {
+			this.state.push(value)
+		}
+
+		get selection() {
+			return Array.from(
+				this.shadowRoot?.querySelector('select')?.selectedOptions ?? []
+			).map(option => option.value)
+		}
+
+		render() {
+			return html`
+				<select multiple ff-share=${this.state}>
+					<option value="a">option a</option>
+					<option value="b">option b</option>
+					<option value="c">option c</option>
+				</select>
+				`
+		}
+	}
+
 	before(() => {
 		customElements.define('test-styled', ColorfulElement)
 		customElements.define('test-attributes', AttributedElement)
+		customElements.define('test-toplevel-dynamic', TopLevelDynamic)
+		customElements.define('test-reactive-array', ReactiveArrayElement)
 	})
 
 	it('Should be styled', () => {
@@ -83,6 +124,19 @@ describe('Declarative Element component', () => {
 
 		await testelement.pendingUpdate
 		expect(shadowText(testelement)).to.equal('no attr one, Second attribute')
+	})
+
+
+	it('can change top level dynamic content', async () => {
+		const element = new TopLevelDynamic
+		testContainer.replaceChildren(element)
+
+		expect(shadowText(element)).to.equal('on')
+
+		firstShadowElement(element).click()
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('off')
 	})
 
 	class InternalStateElement extends DeclarativeElement {
@@ -134,6 +188,17 @@ describe('Declarative Element component', () => {
 
 		expect(statechangeSpy.calls).to.equal(1)
 		expect(clickedSpy.calls).to.equal(1)
+	})
 
+	it('top level array state', async () => {
+		const element = new ReactiveArrayElement
+		testContainer.replaceChildren(element)
+
+		expect(element.selection).to.deepEqual(['a'])
+
+		element.addToState('b')
+
+		await element.pendingUpdate
+		expect(element.selection).to.deepEqual(['a', 'b'])
 	})
 })
