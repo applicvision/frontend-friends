@@ -43,6 +43,24 @@ export function tokens(...definitionParts) {
 	return [...tokenSet].join(' ')
 }
 
+const CAP_REGEX = /[A-Z]/g
+/** @param {string} pascalCase */
+function convertToCSSCasing(pascalCase) {
+	if (pascalCase.startsWith('webkit') || pascalCase.startsWith('moz')) {
+		pascalCase = '-' + pascalCase
+	}
+	return pascalCase
+		.replaceAll(CAP_REGEX, (char) => `-${char.toLowerCase()}`)
+}
+
+/** @param {{[key in keyof CSSStyleDeclaration]?: string|number|null|undefined|false}} declaration */
+export function style(declaration) {
+	return Object.entries(declaration)
+		.filter(([_, value]) => value || value === 0)
+		.map(([property, value]) => `${convertToCSSCasing(property)}: ${value}`)
+		.join('; ')
+}
+
 
 /** @import {TwowayBinding} from './dynamic-fragment.js' */
 
