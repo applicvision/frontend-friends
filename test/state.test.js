@@ -1,9 +1,8 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
 import expect from '@applicvision/js-toolbox/expect'
 import { DeclarativeElement } from '../src/declarative-element.js'
-import { html, twoway } from '../src/dynamic-fragment.js'
+import { html, twoway, island } from '../src/index.js'
 import { addTestContainer, normalizeMarkupText, shadowText } from './helpers.js'
-import { island } from '../src/dynamic-island.js'
 
 
 /**

@@ -22,6 +22,7 @@ describe('Attribte helpers', () => {
 		})
 
 		it('Should handle null', () => {
+			// @ts-expect-error
 			const classes = tokens(null, 'valid-class')
 			assert.equal(classes, 'valid-class')
 		})

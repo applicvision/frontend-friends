@@ -1,7 +1,12 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html, innerHTML, svg, twoway } from '../src/dynamic-fragment.js'
 import expect from '@applicvision/js-toolbox/expect'
+
+import { twoway, html, ref } from '@applicvision/frontend-friends'
+
+import { innerHTML, svg } from '../src/dynamic-fragment.js'
+
 import { addTestContainer, property } from './helpers.js'
+
 
 /**
  * @param {string} text
@@ -713,5 +718,69 @@ describe('Dynamic fragments', () => {
 		</section>
 		 `))
 
+	})
+
+	it('ff-ref', () => {
+		const aRef = ref()
+		const fragment = html`<div ff-ref=${aRef}>test</div>`
+
+		expect(aRef.element).to.equal(null)
+
+		fragment.mount(testContainer)
+
+
+		expect(aRef.element?.isConnected).to.be.true()
+		expect(aRef.element?.textContent).to.equal('test')
+		expect(aRef.element).to.equal(testContainer.querySelector('div'))
+
+		fragment.values = [aRef]
+
+		expect(aRef.element).to.equal(testContainer.querySelector('div'))
+
+		testContainer.innerHTML = ''
+
+		expect(aRef.element?.isConnected).to.be.false()
+	})
+
+	it('typed ff-ref', () => {
+		const aButtonRef = ref(HTMLButtonElement)
+		const fragment = html`<button ff-ref=${aButtonRef}>test</button>`
+
+		expect(aButtonRef.element).to.equal(null)
+
+		fragment.mount(testContainer)
+
+		expect(aButtonRef.element).to.be.a(HTMLButtonElement)
+
+		const anotherFragment = html`<div ff-ref=${aButtonRef}>test2</div>`
+
+		/** @type {Error?} */
+		let error = null
+		try {
+			anotherFragment.mount(testContainer)
+		} catch (err) {
+			if (err instanceof Error) error = err
+		}
+		expect(error).to.be.an(Error)
+		expect(error?.message).to.equal('Unexpected element type')
+	})
+
+	it('ff-ref elementOrThrow', () => {
+		const imageRef = ref(HTMLImageElement)
+		const fragment = html`<img ff-ref=${imageRef}>`
+
+		/** @type {Error?} */
+		let error = null
+		try {
+			imageRef.elementOrThrow
+		} catch (e) {
+			if (e instanceof Error) error = e
+		}
+		expect(error).to.be.an(Error)
+		expect(error?.message).to.equal('Missing element reference')
+
+		fragment.mount(testContainer)
+
+		expect(imageRef.elementOrThrow).to.be.an(HTMLImageElement)
 	})
 })

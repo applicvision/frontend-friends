@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.js",
     "./declarative-element": "./src/declarative-element.js",
+    "./special-attributes": "./src/special-attributes.js",
     "./island": "./src/dynamic-island.js",
     "./store": "./src/store.js",
     "./parse-shape": "./src/parse-shape.js",

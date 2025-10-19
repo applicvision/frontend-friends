@@ -4,8 +4,7 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
  * @import {StoreSubscriber} from './store.js'
- * @import {TwowayBinding} from './dynamic-fragment.js'
- * @import {Keypath} from './deep-watch.js'
+ * @import {TwowayBinding, KeyPath} from './types.js'
  **/
 
 /**
@@ -42,12 +41,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		const { stylesheets, sharedStateName } = this.#componentClass
 
 		shadowRoot.adoptedStyleSheets = stylesheets
-
-		if (this._provisionalStateBinding) {
-			this.#twowayBinding = this._provisionalStateBinding
-			this._provisionalStateBinding = null
-			this.#lastSharedState = this.sharedState
-		}
 
 		if (sharedStateName) {
 			this.#internals = this.attachInternals()
@@ -193,7 +186,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 * @protected
 	 * @template {object} T
 	 * @param {T} object
-	 * @param {(keypath: Keypath<T>, newValue: unknown, oldValue: unknown) => void} effect
+	 * @param {(keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void} effect
 	 * @returns {T}
 	 */
 	reactive(object, effect = (keypath, newValue, oldValue) => { if (newValue !== oldValue) this.invalidate() }) {
