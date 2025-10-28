@@ -9,6 +9,7 @@
   "exports": {
     ".": "./src/index.js",
     "./declarative-element": "./src/declarative-element.js",
+    "./special-attributes": "./src/special-attributes.js",
     "./island": "./src/dynamic-island.js",
     "./store": "./src/store.js",
     "./parse-shape": "./src/parse-shape.js",
@@ -32,6 +33,6 @@
   ],
   "devDependencies": {
     "@applicvision/js-toolbox": "latest",
-    "@playwright/test": "^1.41.2"
+    "@playwright/test": "^1.56.1"
   }
 }

@@ -1,18 +1,9 @@
-/**
- * @template {object} T
- * @typedef {T extends Map<any, any> ? [`Map[${string}]`] : 
- *   T extends Set<any> | Date | URL | URLSearchParams ?
- *   [] :
- *   { [K in keyof T]:
- *     [K, ...(T[K] extends object ? Keypath<T[K]> : [])]
- *   }[keyof T]
- * } Keypath
- */
+/** @import {KeyPath} from './types.js' */
 
 /**
  * @template {{[key: string|symbol]: any}} T
  * @param {T} blueprint
- * @param {(keypath: Keypath<T>, newValue: unknown, oldValue?: unknown) => void} modificationCallback
+ * @param {(keyPath: KeyPath<T>, newValue: unknown, oldValue?: unknown) => void} modificationCallback
  * @param {(string|symbol)[]} keyPath
  * @returns {T}
  */
@@ -31,18 +22,18 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 		return mapProxy(blueprint, {
 			didSet(key, newValue, oldValue) {
 				modificationCallback(
-					/** @type {Keypath<T>}*/(keyPath.concat(`Map[${key}]`)), newValue, oldValue
+					/** @type {KeyPath<T>}*/(keyPath.concat(`Map[${key}]`)), newValue, oldValue
 				)
 			},
 			didDelete(key) {
-				modificationCallback(/** @type {Keypath<T>}*/(keyPath.concat(`Map[${key}]`)), null)
+				modificationCallback(/** @type {KeyPath<T>}*/(keyPath.concat(`Map[${key}]`)), null)
 			},
 			didClear(map) {
-				modificationCallback(/** @type {Keypath<T>}*/(keyPath), map)
+				modificationCallback(/** @type {KeyPath<T>}*/(keyPath), map)
 			},
 			deepModification(innerKeyPath, newValue, oldValue) {
 				modificationCallback(
-					/** @type {Keypath<T>}*/(keyPath.concat(innerKeyPath)), newValue, oldValue
+					/** @type {KeyPath<T>}*/(keyPath.concat(innerKeyPath)), newValue, oldValue
 				)
 			}
 		})
@@ -70,7 +61,7 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 			const result = Reflect.deleteProperty(target, property)
 			if (result) {
 				modificationCallback(
-					/** @type {Keypath<T>}*/(keyPath.concat(property)), undefined, oldValue
+					/** @type {KeyPath<T>}*/(keyPath.concat(property)), undefined, oldValue
 				)
 			}
 			return result
@@ -81,7 +72,7 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 
 			if (result) {
 				modificationCallback(
-					/** @type {Keypath<T>}*/(keyPath.concat(property)), newValue, oldValue
+					/** @type {KeyPath<T>}*/(keyPath.concat(property)), newValue, oldValue
 				)
 			}
 
@@ -94,7 +85,7 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 /**
  * @template {{[key: string|symbol]: any}} T
  * @param {T} target
- * @param {(keypath: Keypath<T>, newValue: unknown, oldValue?: unknown) => void} modificationCallback
+ * @param {(keypath: KeyPath<T>, newValue: unknown, oldValue?: unknown) => void} modificationCallback
  * @returns {T}
  */
 export function deepWatch(target, modificationCallback) {
