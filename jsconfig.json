@@ -6,5 +6,5 @@
     "strict": true,
     "noImplicitAny": true,
     "moduleResolution": "nodenext"
-  },
+  }
 }

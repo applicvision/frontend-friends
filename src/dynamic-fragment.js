@@ -1,7 +1,7 @@
 import { specialAttributes } from '@applicvision/frontend-friends/special-attributes'
 
-const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
-const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(="[^"]*")|(='[^']*')|(=[^'"\s]+))?\s+)*$/
+const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)\s*=\s*((?<quotemark>["'])(?<prefix>[^"']*))?$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(\s*=\s*"[^"]*")|(\s*=\s*'[^']*')|(=[^'"\s]+))?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
@@ -12,7 +12,7 @@ const propertyCommentPrefix = `${commentPrefix}:property:`
 const attributePrefix = 'data-reactive'
 
 /**
- * @import {AttributeLocator, DynamicNode} from './types.js'
+ * @import {AttributeLocator, DynamicNode, InterpolationDescriptor} from './types.js'
  */
 
 
@@ -91,6 +91,84 @@ function nodesInItem(itemStart, itemIndexPath) {
 	}
 
 	return itemNodes
+}
+
+/** @param {TemplateStringsArray|readonly string[]} strings */
+export function interpolationDescriptors(strings) {
+	/** @type {InterpolationDescriptor[]} */
+	const descriptors = []
+
+	for (let index = 0; index < strings.length - 1; index++) {
+
+		const part = strings[index]
+		const previousDescriptor = descriptors[index - 1]
+
+		if (
+			(previousDescriptor?.type == 'attributeExtension' || previousDescriptor?.type == 'attribute') &&
+			previousDescriptor.quotemark && !part.includes(previousDescriptor.quotemark)) {
+			descriptors.push({
+				type: 'attributeExtension',
+				attribute: previousDescriptor.attribute,
+				attributeStart: previousDescriptor.attributeStart,
+				elementName: previousDescriptor.elementName,
+				quotemark: previousDescriptor.quotemark,
+				prefix: '',
+				suffix: ''
+			})
+			break
+		}
+
+		/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
+		// @ts-ignore
+		const attributeMatch = part.match(attributeRegex)
+
+
+		/** @type {string|undefined} */
+		let elementForAttribute
+		if (attributeMatch) {
+			const precedingString = strings
+				.slice(0, index + 1)
+				.join('')
+				.slice(0, -attributeMatch[0].length)
+
+			/** @type {RegExpMatchArray & {groups: {element: string}}|null} */
+			// @ts-ignore
+			const result = precedingString.match(elementForAttributeRegex)
+			elementForAttribute = result?.groups.element
+		}
+
+		if (attributeMatch && elementForAttribute) {
+			const { quotemark = '', prefix = '' } = attributeMatch.groups
+			const attribute = attributeMatch.groups.attribute.toLowerCase()
+
+			let suffix = ''
+			if (quotemark) {
+				const nextPart = strings[index + 1]
+				const endOfQuote = nextPart.indexOf(quotemark)
+				if (endOfQuote != -1) {
+					suffix = nextPart.slice(0, endOfQuote)
+				}
+			}
+			const type =
+				attribute.startsWith('ff-') ? 'specialAttribute' :
+					attribute.startsWith('on') ? 'eventhandler' :
+						'attribute'
+
+			descriptors.push({
+				type,
+				attribute,
+				attributeStart: part.length - (attributeMatch.index ?? 0),
+				quotemark,
+				elementName: elementForAttribute,
+				prefix,
+				suffix
+			})
+		} else {
+			descriptors.push({ type: 'content' })
+		}
+
+	}
+	return descriptors
 }
 
 class InnerHTML {
@@ -269,7 +347,7 @@ export class DynamicFragment {
 
 					htmlResult += locatorAttribute
 					attributeLocators[index] = { type: 'specialAttribute', attribute, index, dataAttributeValue }
-					return true
+					return
 				}
 
 				if (attribute.startsWith('on')) {
@@ -292,7 +370,7 @@ export class DynamicFragment {
 						throw new Error('Boolean attributes can not have prefix/suffix')
 					}
 					if (quotemark) {
-						console.warn('Unexpected quotemark for boolean attribute.')
+						throw new Error('Unexpected quotemark for boolean attribute.')
 					}
 					htmlResult += locatorAttribute
 					if (value) {
@@ -362,7 +440,7 @@ export class DynamicFragment {
 			} else if (value || value === 0) {
 				htmlResult += escapeHtml(value.toString())
 			} else {
-				// falsy content (except 0), does not render anything
+				// falsy content (except 0) does not render anything
 			}
 			htmlResult += `<!-- ${contentCommentPrefix}${indexPathPrefix}${index} -->`
 
