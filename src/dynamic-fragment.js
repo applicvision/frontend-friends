@@ -709,9 +709,9 @@ export class DynamicFragment {
 
 		this.#values = newValues.map((value, index) => {
 			const previousValue = this.values[index]
-			const dynamicNode = this.#dynamicNodes[index]
+			const dynamicNode = /** @type {DynamicNode|undefined} */ (this.#dynamicNodes[index])
 
-			if (dynamicNode.type == 'specialAttribute') {
+			if (dynamicNode?.type == 'specialAttribute') {
 				const specialAttribute = specialAttributes.get(dynamicNode.attribute)
 				specialAttribute?.update(dynamicNode.node, value, previousValue)
 

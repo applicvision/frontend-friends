@@ -140,6 +140,20 @@ describe('Dynamic fragments', () => {
 
 	})
 
+	it('update fragment with comments', () => {
+		const fragment = html`
+            <div>${'test'}</div>
+            <!-- <div>${'commented'}</div> -->
+            <div>${'after comment'}</div>
+        `
+		fragment.mount(testContainer)
+
+		expect(testContainer.innerText.trim()).to.equal('test\nafter comment')
+
+		fragment.values = ['update', 'still commented', 'update after']
+		expect(testContainer.innerText.trim()).to.equal('update\nupdate after')
+	})
+
 	it('Attributes with fixed beginning', () => {
 		const fragment = html`<div class="beforeclass ${'test'}">hello</div>`
 		fragment.mount(testContainer)
@@ -269,12 +283,13 @@ describe('Dynamic fragments', () => {
 	it('event handler with set context', () => {
 		let valueToCheck = ''
 		let innerValueToCheck = ''
-		const clickHandler = function () { valueToCheck = this.value }
-		const innerClickHandler = function () { innerValueToCheck = this.value }
 
 		const context = {
 			value: 'it works'
 		}
+
+		const clickHandler = /** @this {typeof context} */ function () { valueToCheck = this.value }
+		const innerClickHandler = /** @this {typeof context} */ function () { innerValueToCheck = this.value }
 
 		const fragment = html`
 			<button class="outer" onclick=${clickHandler}>tryck</button>
