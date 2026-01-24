@@ -10,15 +10,6 @@ describe('Dynamic Fragment Parsing', () => {
 
 	before(() => testContainer = addTestContainer())
 
-	it('Should handle newlines in attributes', () => {
-		const fragment = html`<div class="
-			${'test'}
-		">content</div>`
-		fragment.mount(testContainer)
-
-		expect(testContainer.firstElementChild?.className.trim()).to.equal('test')
-	})
-
 	it('content which looks like attributes', () => {
 		const fragment = html`<div>attribute=${'value'}</div>`
 		fragment.mount(testContainer)

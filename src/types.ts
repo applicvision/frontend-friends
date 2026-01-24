@@ -5,13 +5,13 @@ export type SpecialAttribute<ValueType, ElementType extends Element> = {
 	update: (element: ElementType, value: ValueType, previousValue?: ValueType) => void,
 }
 
-type BaseAttributeDescrptor = { attribute: string, attributeStart: number, elementName: string, quotemark: '"' | "'" | '', prefix: string, suffix: string }
+type BaseAttributeDescriptor = { attribute: string, attributeStart: number, elementName: string, quotemark: '"' | "'" | '', prefix: string, suffix: string }
 
 export type InterpolationDescriptor =
-	BaseAttributeDescrptor & { type: 'attribute' } |
-	BaseAttributeDescrptor & { type: 'specialAttribute' } |
-	BaseAttributeDescrptor & { type: 'eventhandler' } |
-	BaseAttributeDescrptor & { type: 'attributeExtension', quotemark: '"' | "'" } |
+	BaseAttributeDescriptor & { type: 'attribute' } |
+	BaseAttributeDescriptor & { type: 'specialAttribute' } |
+	BaseAttributeDescriptor & { type: 'eventhandler' } |
+	BaseAttributeDescriptor & { type: 'attributeExtension', quotemark: '"' | "'" } |
 	{ type: 'content' }
 
 export type AttributeLocator =
