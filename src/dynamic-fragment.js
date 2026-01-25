@@ -1,7 +1,7 @@
 import { specialAttributes } from '@applicvision/frontend-friends/special-attributes'
 
-const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)=((?<quotemark>["'])(?<prefix>[^"']*))?$/
-const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(="[^"]*")|(='[^']*')|(=[^'"\s]+))?\s+)*$/
+const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)\s*=\s*((?<quotemark>["'])(?<prefix>[^"']*))?$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(\s*=\s*"[^"]*")|(\s*=\s*'[^']*')|(=[^'"\s]+))?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`
@@ -12,7 +12,7 @@ const propertyCommentPrefix = `${commentPrefix}:property:`
 const attributePrefix = 'data-reactive'
 
 /**
- * @import {AttributeLocator, DynamicNode} from './types.js'
+ * @import {AttributeLocator, DynamicNode, InterpolationDescriptor} from './types.js'
  */
 
 
@@ -91,6 +91,90 @@ function nodesInItem(itemStart, itemIndexPath) {
 	}
 
 	return itemNodes
+}
+
+/** @param {TemplateStringsArray|readonly string[]} strings */
+export function interpolationDescriptors(strings) {
+	/** @type {InterpolationDescriptor[]} */
+	const descriptors = []
+
+	for (let index = 0; index < strings.length - 1; index++) {
+
+		const part = strings[index]
+		const previousDescriptor = descriptors[index - 1]
+
+		if (
+			(previousDescriptor?.type == 'attributeExtension' || previousDescriptor?.type == 'attribute') &&
+			previousDescriptor.quotemark && !part.includes(previousDescriptor.quotemark)) {
+
+			const nextPart = strings[index + 1]
+			const endOfQuote = nextPart.indexOf(previousDescriptor.quotemark)
+
+			const suffix = endOfQuote == -1 ? '' : nextPart.slice(0, endOfQuote)
+
+			descriptors.push({
+				type: 'attributeExtension',
+				attribute: previousDescriptor.attribute,
+				attributeStart: previousDescriptor.attributeStart,
+				elementName: previousDescriptor.elementName,
+				quotemark: previousDescriptor.quotemark,
+				prefix: part,
+				suffix
+			})
+			continue
+		}
+
+		/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
+		// @ts-ignore
+		const attributeMatch = part.match(attributeRegex)
+
+
+		/** @type {string|undefined} */
+		let elementForAttribute
+		if (attributeMatch) {
+			const precedingString = strings
+				.slice(0, index + 1)
+				.join('')
+				.slice(0, -attributeMatch[0].length)
+
+			/** @type {RegExpMatchArray & {groups: {element: string}}|null} */
+			// @ts-ignore
+			const result = precedingString.match(elementForAttributeRegex)
+			elementForAttribute = result?.groups.element
+		}
+
+		if (attributeMatch && elementForAttribute) {
+			const { quotemark = '', prefix = '' } = attributeMatch.groups
+			const attribute = attributeMatch.groups.attribute.toLowerCase()
+
+			let suffix = ''
+			if (quotemark) {
+				const nextPart = strings[index + 1]
+				const endOfQuote = nextPart.indexOf(quotemark)
+				if (endOfQuote != -1) {
+					suffix = nextPart.slice(0, endOfQuote)
+				}
+			}
+			const type =
+				attribute.startsWith('ff-') ? 'specialAttribute' :
+					attribute.startsWith('on') ? 'eventhandler' :
+						'attribute'
+
+			descriptors.push({
+				type,
+				attribute,
+				attributeStart: part.length - (attributeMatch.index ?? 0),
+				quotemark,
+				elementName: elementForAttribute,
+				prefix,
+				suffix
+			})
+		} else {
+			descriptors.push({ type: 'content' })
+		}
+
+	}
+	return descriptors
 }
 
 class InnerHTML {
@@ -181,6 +265,8 @@ export class DynamicFragment {
 		/** @type {AttributeLocator[]} */
 		const attributeLocators = []
 
+		const descriptors = interpolationDescriptors(strings)
+
 		values.forEach((value, index) => {
 			let part = strings.raw[index]
 
@@ -207,63 +293,32 @@ export class DynamicFragment {
 				return
 			}
 
-			const previousAttributeLocator = attributeLocators[index - 1]
 
-			if ((previousAttributeLocator?.type == 'attributeExtension' || previousAttributeLocator?.type == 'attribute') && previousAttributeLocator.quotemark && !part.includes(previousAttributeLocator.quotemark)) {
+			const interpolationDescriptor = descriptors[index]
 
-				const nextPart = strings[index + 1]
-				const endOfQuote = nextPart.indexOf(previousAttributeLocator.quotemark)
+			if (interpolationDescriptor.type == 'attributeExtension') {
+				let associatedIndex = index - 1
+				while (descriptors[associatedIndex].type != 'attribute') associatedIndex -= 1
 
-				const suffix = endOfQuote == -1 ? '' : nextPart.slice(0, endOfQuote)
-
-				const associatedIndex = previousAttributeLocator.type == 'attributeExtension' ? previousAttributeLocator.associatedIndex : index - 1
-
-				attributeLocators[index] = { type: 'attributeExtension', index, prefix: part, suffix, quotemark: previousAttributeLocator.quotemark, associatedIndex }
-
+				const { prefix, suffix, type, quotemark } = interpolationDescriptor
+				attributeLocators[index] = { type, prefix, suffix, index, quotemark, associatedIndex }
 				htmlResult += part + escapeHtml(String(value ?? ''))
-
 				return
 			}
 
-			/** @type {RegExpMatchArray & {groups: {attribute: string, quotemark: '"'|"'"|'', prefix: string}}|null} */
-			// @ts-ignore
-			const attributeMatch = part.match(attributeRegex)
+			if (interpolationDescriptor.type == 'attribute' ||
+				interpolationDescriptor.type == 'specialAttribute' ||
+				interpolationDescriptor.type == 'eventhandler') {
+				const { type, attributeStart, attribute, quotemark, prefix, suffix } = interpolationDescriptor
 
-
-			/** @type {string|undefined} */
-			let elementForAttribute
-			if (attributeMatch) {
-				const precedingString = strings
-					.slice(0, index + 1)
-					.join('')
-					.slice(0, -attributeMatch[0].length)
-
-				/** @type {RegExpMatchArray & {groups: {element: string}}|null} */
-				// @ts-ignore
-				const result = precedingString.match(elementForAttributeRegex)
-				elementForAttribute = result?.groups.element
-			}
-
-			if (attributeMatch && elementForAttribute) {
-				const { quotemark = '', prefix = '' } = attributeMatch.groups
-				const attribute = attributeMatch.groups.attribute.toLowerCase()
-
-				let suffix = ''
-				if (quotemark) {
-					const nextPart = strings[index + 1]
-					const endOfQuote = nextPart.indexOf(quotemark)
-					if (endOfQuote != -1) {
-						suffix = nextPart.slice(0, endOfQuote)
-					}
-				}
-
-				// add the content up to the attribute
-				htmlResult += part.slice(0, -attributeMatch[0].length)
+				// add the content up to the attribute. attributeStart is counted from the end of the string
+				htmlResult += part.slice(0, -attributeStart)
 
 				const dataAttributeValue = indexPathPrefix + index
 				const locatorAttribute = `${attributePrefix}-${attribute}=${quotemark}${dataAttributeValue}`
 
-				if (attribute.startsWith('ff-')) {
+				if (type == 'specialAttribute') {
+
 					const specialAttribute = specialAttributes.get(attribute)
 					if (!specialAttribute) {
 						throw new Error(`Unknown special attribute: ${attribute}. Is it registered?`)
@@ -276,11 +331,10 @@ export class DynamicFragment {
 					if (isValueValid && !isValueValid(value)) throw new Error(`Invalid value for ${attribute}`)
 
 					htmlResult += locatorAttribute
-					attributeLocators[index] = { type: 'specialAttribute', attribute, index, dataAttributeValue }
-					return true
+					attributeLocators[index] = { type, attribute, index, dataAttributeValue }
+					return
 				}
-
-				if (attribute.startsWith('on')) {
+				if (type == 'eventhandler') {
 					if (typeof value != 'function') {
 						throw new Error('Only functions are supported as event handlers')
 					}
@@ -290,7 +344,7 @@ export class DynamicFragment {
 					const eventName = attribute.slice(2)
 
 					htmlResult += locatorAttribute
-					attributeLocators[index] = { type: 'eventhandler', attribute, index, event: eventName, dataAttributeValue }
+					attributeLocators[index] = { type, attribute, index, event: eventName, dataAttributeValue }
 					return
 				}
 
@@ -300,7 +354,7 @@ export class DynamicFragment {
 						throw new Error('Boolean attributes can not have prefix/suffix')
 					}
 					if (quotemark) {
-						console.warn('Unexpected quotemark for boolean attribute.')
+						throw new Error('Unexpected quotemark for boolean attribute.')
 					}
 					htmlResult += locatorAttribute
 					if (value) {
@@ -310,7 +364,7 @@ export class DynamicFragment {
 					attributeLocators[index] = {
 						type: 'booleanAttribute',
 						index,
-						attribute: attribute.toLowerCase(),
+						attribute,
 						dataAttributeValue
 					}
 				} else if (typeof value == 'number' || typeof value == 'string' || value == null) {
@@ -330,8 +384,8 @@ export class DynamicFragment {
 					htmlResult += ` ${attribute}=${quotemark}${attributeValue}`
 
 					attributeLocators[index] = {
-						type: 'attribute',
-						attribute: attribute.toLowerCase(),
+						type,
+						attribute,
 						quotemark,
 						index,
 						prefix,
@@ -370,7 +424,7 @@ export class DynamicFragment {
 			} else if (value || value === 0) {
 				htmlResult += escapeHtml(value.toString())
 			} else {
-				// falsy content (except 0), does not render anything
+				// falsy content (except 0) does not render anything
 			}
 			htmlResult += `<!-- ${contentCommentPrefix}${indexPathPrefix}${index} -->`
 
@@ -657,6 +711,7 @@ export class DynamicFragment {
 			const template = document.createElement('template')
 			template.innerHTML = this.#getHtmlString()
 
+			// This upgrades custom elements
 			fragment = document.importNode(template.content, true)
 		}
 
