@@ -215,10 +215,17 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	/** @type {Map<TemplateStringsArray, DynamicFragment>} */
 	#fragmentCache = new Map()
 
+	get isRendering() {
+		return this.#isRendering
+	}
+
+	#isRendering = false
 	#internalRender() {
 		if (!this.shadowRoot) return
 
+		this.#isRendering = true
 		const dynamicFragment = this.render()
+		this.#isRendering = false
 		if (!this.#currentFragment) {
 			dynamicFragment.mount(this.shadowRoot, this)
 			this.#currentFragment = dynamicFragment

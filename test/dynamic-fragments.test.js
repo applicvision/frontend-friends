@@ -164,6 +164,38 @@ describe('Dynamic fragments', () => {
 		expect(testContainer.firstElementChild?.className).to.equal('beforeclass test2')
 	})
 
+	it('Static fragment', () => {
+		const staticFragment = html`<h1>Static</h1>`
+		expect(staticFragment.isStatic).to.be.true()
+
+		const fragment = html`<section>${staticFragment}</section>`
+		fragment.mount(testContainer)
+
+		// This should not result in warning, since fragment is static
+		fragment.values = [staticFragment]
+
+		/** @param {string} title */
+		function makeDynamicFragment(title) {
+			return html`<h1>${title}</h2>`
+		}
+
+		const dyn1 = makeDynamicFragment('Dyn1')
+		const dyn2 = makeDynamicFragment('Dyn2')
+
+		expect(dyn1.isStatic).to.be.false()
+
+		fragment.values = [dyn1]
+
+		// This results in modification of dyn1
+		fragment.values = [dyn2]
+		expect(dyn1.values).to.deepEqual(dyn2.values)
+
+		// This should result in a warning
+		fragment.values = [dyn1]
+
+		expect(testContainer.textContent).to.equal('Dyn2')
+	})
+
 	it('Attributes with fixed end', () => {
 		const fragment = html`<div class="${'test'} afterclass">hello</div>`
 		fragment.mount(testContainer)

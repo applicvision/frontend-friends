@@ -154,6 +154,7 @@ describe('Declarative Element component', () => {
 			return html`
 				<input ff-share=${this.twoway(this.state, 'text').withEffect(this.emitChangeEvent)}>
 				<button type="button" onclick=${this.emitClick}>click me</button>
+				<div id="rendering">${this.isRendering}</div>
 			`
 		}
 	}
@@ -188,6 +189,9 @@ describe('Declarative Element component', () => {
 
 		expect(statechangeSpy.calls).to.equal(1)
 		expect(clickedSpy.calls).to.equal(1)
+
+		expect(element.isRendering).to.be.false()
+		expect(element.shadowRoot?.getElementById('rendering')?.textContent).to.equal('true')
 	})
 
 	it('top level array state', async () => {

@@ -130,6 +130,14 @@ export class PropertySetter {
 	}
 }
 
+/**
+ * This is not really checking that items are fragments. It is serving as a TS type assertion
+ * @type {(value: unknown) => value is DynamicFragment[]}
+ */
+function isArrayOfFragments(value) {
+	return Array.isArray(value)
+}
+
 export class DynamicFragment {
 
 	/**
@@ -719,6 +727,9 @@ export class DynamicFragment {
 			}
 
 			if (value == previousValue) {
+				if (value instanceof DynamicFragment && !value.isStatic) {
+					console.warn('Update with identical dynamic fragment. Please recreate dynamic fragments for every update.')
+				}
 				return value
 			}
 
@@ -772,10 +783,10 @@ export class DynamicFragment {
 					range.setEndBefore(dynamicNode.end)
 
 
-					if (Array.isArray(previousValue)) {
-						if (Array.isArray(value)) { // array => array
+					if (isArrayOfFragments(previousValue)) {
+						if (isArrayOfFragments(value)) { // array => array
 
-							if (value.some((value, index) => value == previousValue[index])) {
+							if (value.some((value, index) => value == previousValue[index] && !value.isStatic)) {
 								console.warn('Detected identical item in array. Please recreate dynamic fragments for every list rendering')
 								return value
 							}
@@ -806,7 +817,7 @@ export class DynamicFragment {
 						range.deleteContents()
 					}
 
-					if (value instanceof Array) {
+					if (isArrayOfFragments(value)) {
 						return this.#simpleListUpdate([], value, dynamicNode)
 					}
 
@@ -1031,6 +1042,10 @@ export class DynamicFragment {
 
 	get values() {
 		return this.#values
+	}
+
+	get isStatic() {
+		return this.strings.length == 1 && this.values.length == 0
 	}
 
 	toString() {
