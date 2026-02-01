@@ -1,4 +1,7 @@
-/** @import {KeyPath} from './types.js' */
+/** @import {KeyPath} from '../types/type-utils.d.ts' */
+
+/** @import {deepWatch as DeepWatchFunc, effect as EffectFunc} from '../types/src/deep-watch.js' */
+
 
 /**
  * @template {{[key: string|symbol]: any}} T
@@ -82,12 +85,7 @@ function recursiveWatch(blueprint, modificationCallback, keyPath = []) {
 }
 
 
-/**
- * @template {{[key: string|symbol]: any}} T
- * @param {T} target
- * @param {(keypath: KeyPath<T>, newValue: unknown, oldValue?: unknown) => void} modificationCallback
- * @returns {T}
- */
+/** @type {DeepWatchFunc} */
 export function deepWatch(target, modificationCallback) {
 	if (!target) {
 		throw new Error('Invalid target', target)
@@ -95,16 +93,11 @@ export function deepWatch(target, modificationCallback) {
 	if (typeof target != 'object') {
 		throw new Error('Can not watch non object. Supplied target was type: ' + typeof target)
 	}
+
 	return recursiveWatch(target, modificationCallback)
 }
 
-/**
- * Pass an object to deep watch. The `effect` function is called asynchronously on changes.
- * @template {object} T
- * @param {T} target
- * @param {(target: T) => void} effect
- * @returns {T}
- */
+/** @type {EffectFunc} */
 export function effect(target, effect) {
 	/** @type {Promise<any>|null} */
 	let effectPromise = null
@@ -285,7 +278,7 @@ function urlProxy(url, callback) {
 
 /**
  * @param {URLSearchParams} searchParams
- * @param {(value: searchParams) => void} callback
+ * @param {(value: URLSearchParams) => void} callback
  */
 function searchParamsProxy(searchParams, callback) {
 	const nodeInspectSymbol = Symbol.for('nodejs.util.inspect.custom')
@@ -307,6 +300,7 @@ function searchParamsProxy(searchParams, callback) {
 				case 'set':
 				case 'sort':
 				case 'delete': return function proxiedMutation(/** @type {any[]} */...args) {
+					// @ts-expect-error
 					const returnValue = URLSearchParams.prototype[property].apply(target, args)
 					callback(target)
 					return returnValue

@@ -1,4 +1,12 @@
-/** @import {SpecialAttribute, TwowayBinding, CustomTwowayBindable, PredicateType} from './types.js' */
+
+/** @import {SpecialAttribute, TwowayBinding, CustomTwowayBindable, PredicateType} from '../types/type-utils.js' */
+
+/** @import {
+ * twoway as TwowayFactory,
+ * ref as RefFactory,
+ * registerSpecialAttribute as RegisterSpecialAttributeFunc,
+ * unregisterSpecialAttribute as UnregisterSpecialAttributeFunc
+ * } from '../types/src/special-attributes.js' */
 
 /** @type {Map<string, SpecialAttribute<any, any>>} */
 export const specialAttributes = new Map()
@@ -7,12 +15,7 @@ const specialAttributePrefix = 'ff-'
 
 const specialAttributeRegex = /^[a-z][a-z-]*$/
 
-/**
- * @template ValueType
- * @template {Element} [ElementType=Element]
- * @param {`ff-${string}`} name
- * @param {SpecialAttribute<ValueType, ElementType>} specification
- */
+/** @type {RegisterSpecialAttributeFunc} */
 export function registerSpecialAttribute(name, specification) {
 	if (specialAttributes.has(name)) {
 		throw new Error(`Special attribute ${name} is already registered`)
@@ -26,7 +29,7 @@ export function registerSpecialAttribute(name, specification) {
 	return specialAttributes.set(name, specification)
 }
 
-/** @param {string} name */
+/** @type {UnregisterSpecialAttributeFunc} */
 export function unregisterSpecialAttribute(name) {
 	if (name == 'ff-share' || name == 'ff-ref') {
 		throw new Error(`Can not remove ${name}`)
@@ -374,17 +377,7 @@ class Twoway {
 	}
 }
 
-/**
- * @template {object} T
- * @template {keyof T} Key
- * @template [TransformedType=T[Key]]
- * @param {T} state
- * @param {Key} property
- * @param {((fieldValue: TransformedType) => T[Key])} [toTransform]
- * @param {((stateValue: T[Key]) => TransformedType)} [fromTransform]
- * @param {unknown} [effectContext]
- * @returns {Twoway<T[Key], TransformedType>}
- */
+/** @type {TwowayFactory} */
 export function twoway(state, property, toTransform, fromTransform, effectContext) {
 	return new Twoway(state, property, toTransform, fromTransform, effectContext)
 }
@@ -424,10 +417,7 @@ class ElementReference {
 	}
 }
 
-/**
- * @template {{new (): Element}} T
- * @param {T} [type]
- */
+/** @type {RefFactory} */
 export function ref(type) {
 	return new ElementReference(type)
 }

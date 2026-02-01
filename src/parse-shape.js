@@ -1,14 +1,5 @@
 
-
-/**
- * @template T
- * @typedef {T extends StringConstructor | NumberConstructor | BooleanConstructor ? ReturnType<T> : 
-* T extends abstract new (...args: any) => any ? InstanceType<T> : 
-* T extends Optional<infer Type> ? (undefined|DataShape<Type>) :
-* T extends Array<infer Item> ? DataShape<Item>[] :
-* T extends Object ? {[key in keyof T]: DataShape<T[key]>} : never
-* } DataShape
-*/
+/** @import {DataShape} from '../types/src/parse-shape.js' */
 
 /**
  * @template T
@@ -97,8 +88,8 @@ export function parse(shape, data) {
 			try {
 				return parse(shape[0], entry)
 			} catch (error) {
-				/** @type {ParseError} */
-				const parseError = error
+
+				const parseError = /** @type {ParseError} */(error)
 				const rethrown = new ParseError(parseError.message)
 				rethrown.keyPath = [`[${index}]`, ...parseError.keyPath]
 				throw rethrown

@@ -1,8 +1,5 @@
-/** @typedef {{storeChanged: (store: ResourceStore<any>) => void}} StoreSubscriber */
+/** @import {StoreSubscriber, AutoSubscriber} from '../types/src/store.js' */
 
-/** @typedef {StoreSubscriber & {subscriptions: Set<ResourceStore<any>>}} AutoSubscriber */
-
-/** @typedef {ResourceStore<any>} AnyStore */
 
 /** @template {{[key: string]: any}} T */
 class ResourceStore {

@@ -1,10 +1,11 @@
 import { twoway, html } from '@applicvision/frontend-friends'
-import { DynamicFragment } from '@applicvision/frontend-friends/dynamic-fragment'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
- * @import {StoreSubscriber} from './store.js'
- * @import {TwowayBinding, KeyPath} from './types.js'
+ * @import {StoreSubscriber} from '../types/src/store.js'
+ * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass} from '../types/type-utils.js'
+ * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
+ * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
 
 /**
@@ -155,21 +156,14 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		}
 	}
 
-	/**
-	 * @param {string} attributeName
-	 * @param {string} oldValue
-	 * @param {string} newValue
-	 */
+	/** @type {DeclarativeElementClass['attributeChangedCallback']} */
 	attributeChangedCallback(attributeName, oldValue, newValue) {
 		if (this.isMounted) {
 			this.invalidate()
 		}
 	}
 
-	/**
-	 * @protected
-	 * @type {typeof twoway}
-	 */
+	/** @type {DeclarativeElementClass['twoway']} */
 	twoway(state, property, toTransform, fromTransform) {
 		return twoway(state, property, toTransform, fromTransform, this)
 	}
@@ -254,12 +248,13 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 }
 
+/** @implements {StyleDeclarationClass} */
 class StyleDeclaration {
 	#stringValue = ''
 
 	/**
 	 * @param {TemplateStringsArray} strings
-	 * @param {(StyleDeclaration|InnerCSS)[]} nestedParts
+	 * @param {(StyleDeclarationClass|InnerCSSClass)[]} nestedParts
 	 */
 	constructor(strings, nestedParts) {
 		this.#stringValue = strings.reduce((total, stringPart, index) => {
@@ -314,8 +309,7 @@ const twowayPlaceholder = {
 
 
 /**
- * @param {TemplateStringsArray} strings
- * @param {(StyleDeclaration|InnerCSS)[]} values
+ * @type {CssFunc}
  */
 export function css(strings, ...values) {
 	return new StyleDeclaration(strings, values)

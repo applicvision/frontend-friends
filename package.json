@@ -7,32 +7,62 @@
   "repository": "github:applicvision/frontend-friends",
   "main": "./src/index.js",
   "exports": {
-    ".": "./src/index.js",
-    "./declarative-element": "./src/declarative-element.js",
-    "./special-attributes": "./src/special-attributes.js",
-    "./island": "./src/dynamic-island.js",
-    "./store": "./src/store.js",
-    "./parse-shape": "./src/parse-shape.js",
-    "./deep-watch": "./src/deep-watch.js",
-    "./attribute-helpers": "./src/attribute-helpers.js",
+    ".": {
+      "types": "./types/src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./declarative-element": {
+      "types": "./types/src/declarative-element.d.ts",
+      "default": "./src/declarative-element.js"
+    },
+    "./special-attributes": {
+      "types": "./types/src/special-attributes.d.ts",
+      "default": "./src/special-attributes.js"
+    },
+    "./island": {
+      "types": "./types/src/dynamic-island.d.ts",
+      "default": "./src/dynamic-island.js"
+    },
+    "./dynamic-fragment": {
+      "types": "./types/src/dynamic-fragment.d.ts",
+      "default": "./src/dynamic-fragment.js"
+    },
+    "./store": {
+      "types": "./types/src/store.d.ts",
+      "default": "./src/store.js"
+    },
+    "./parse-shape": {
+      "types": "./types/src/parse-shape.d.ts",
+      "default": "./src/parse-shape.js"
+    },
+    "./deep-watch": {
+      "types": "./types/src/deep-watch.d.ts",
+      "default": "./src/deep-watch.js"
+    },
+    "./attribute-helpers": {
+      "types": "./types/src/attribute-helpers.d.ts",
+      "default": "./src/attribute-helpers.js"
+    },
     "./router": "./src/router/router.js",
     "./base-router": "./src/router/base-router.js",
     "./browser-router": "./src/router/browser-router.js",
     "./router/dynamic-island": "./src/router/dynamic-island.js",
-    "./router/router-link": "./src/router/router-link.js",
-    "./dynamic-fragment": "./src/dynamic-fragment.js"
+    "./router/router-link": "./src/router/router-link.js"
   },
   "scripts": {
     "tdd": "test-browser --watch test --watch src",
     "node-test": "node --test **/*.nodetest.js",
     "node-tdd": "node --watch --test **/*.nodetest.js",
-    "serve-docs": "self-serve docs --base frontend-friends"
+    "serve-docs": "self-serve docs --base frontend-friends",
+    "build-types": "tsc -p tsconfig.types.json"
   },
   "files": [
-    "src"
+    "src",
+    "types"
   ],
   "devDependencies": {
     "@applicvision/js-toolbox": "latest",
-    "@playwright/test": "^1.56.1"
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^25.2.0"
   }
 }

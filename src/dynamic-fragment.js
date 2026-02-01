@@ -12,13 +12,21 @@ const propertyCommentPrefix = `${commentPrefix}:property:`
 const attributePrefix = 'data-reactive'
 
 /**
- * @import {AttributeLocator, DynamicNode, InterpolationDescriptor} from './types.js'
+ * @import {AttributeLocator, DynamicNode, TemplateTagFunction, InnerHTML as InnerHTMLClass} from '../types/type-utils.js'
  */
-
 
 /**
- * @param {string} inputString
+ * @import {
+ * interpolationDescriptors as InterpolationDescriptorsFunc, 
+ * html as HTMLTagFunction, 
+ * innerHTML as InnerHTMLFunc,
+ * PropertySetter as PropertySetterClass,
+ * DynamicFragment as DynamicFragmentClass
+ * } from '../types/src/dynamic-fragment.js'
  */
+
+
+/** @param {string} inputString */
 function escapeHtml(inputString) {
 	return escapeEntries.reduce(
 		(string, [character, replacement]) => string.replaceAll(character, replacement),
@@ -38,29 +46,22 @@ const escapeCharacters = {
 }
 const escapeEntries = Object.entries(escapeCharacters)
 
-/**
- * @param {TemplateStringsArray} strings
- * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|object|null|undefined)[]} values
- */
+/** @type {TemplateTagFunction} */
 export function html(strings, ...values) {
 	return new DynamicFragment(strings, values)
 }
 
-/**
- * @param {TemplateStringsArray} strings
- * @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|object|null|undefined)[]} values
- */
+/** @type {TemplateTagFunction} */
 export function svg(strings, ...values) {
 	return new DynamicFragment(strings, values, true)
 }
 
-html.key = svg.key = function (/** @type {string | number} */ key) {
-	/**
-	* @param {TemplateStringsArray} strings
-	* @param {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|object|null|undefined)[]} values
-	*/
+/** @type {HTMLTagFunction['key']} */
+function keyedFragment(key) {
 	return (strings, ...values) => this(strings, ...values).key(key)
 }
+
+html.key = svg.key = keyedFragment
 
 /**
  * @param {Comment} itemStart 
@@ -93,9 +94,9 @@ function nodesInItem(itemStart, itemIndexPath) {
 	return itemNodes
 }
 
-/** @param {TemplateStringsArray|readonly string[]} strings */
+/** @type {InterpolationDescriptorsFunc} */
 export function interpolationDescriptors(strings) {
-	/** @type {InterpolationDescriptor[]} */
+	/** @type {ReturnType<InterpolationDescriptorsFunc>} */
 	const descriptors = []
 
 	for (let index = 0; index < strings.length - 1; index++) {
@@ -177,6 +178,7 @@ export function interpolationDescriptors(strings) {
 	return descriptors
 }
 
+/** @implements {InnerHTMLClass} */
 class InnerHTML {
 
 	/**
@@ -196,13 +198,12 @@ class InnerHTML {
 	}
 }
 
-/**
- * @param {string} htmlString
- */
+/** @type {InnerHTMLFunc} */
 export function innerHTML(htmlString) {
 	return new InnerHTML(htmlString)
 }
 
+/** @implements {PropertySetterClass} */
 export class PropertySetter {
 	/** 
 	 * @param {string} key 
@@ -222,6 +223,7 @@ function isArrayOfFragments(value) {
 	return Array.isArray(value)
 }
 
+/** @implements {DynamicFragmentClass} */
 export class DynamicFragment {
 
 	/**
@@ -234,7 +236,7 @@ export class DynamicFragment {
 	 **/
 	#attributeLocators = null
 
-	strings
+	#strings
 
 	#values
 
@@ -248,7 +250,7 @@ export class DynamicFragment {
 	 * @param  {(DynamicFragment|DynamicFragment[]|PropertySetter|string|number|boolean|Function|InnerHTML|object|null|undefined)[]} values
 	 */
 	constructor(strings, values, isSvg = false) {
-		this.strings = strings
+		this.#strings = strings
 		this.#values = values
 		this.#isSvg = isSvg
 	}
@@ -538,10 +540,8 @@ export class DynamicFragment {
 		return element
 	}
 
-	/**
-	 * @param {Element|DocumentFragment|ShadowRoot} container
-	 * @param {unknown=} eventHandlerContext
-	 */
+
+	/** @type {DynamicFragmentClass['hydrate']} */
 	hydrate(container, eventHandlerContext) {
 		this.#nodes = [...container.childNodes]
 		if (!this.#attributeLocators) {
@@ -645,10 +645,7 @@ export class DynamicFragment {
 	/** @type {Node[]?} */
 	#nodes = null
 
-	/**
-	 * @param {HTMLElement|ShadowRoot} container 
-	 * @param {unknown=} eventHandlerContext
-	 **/
+	/** @type {DynamicFragmentClass['mount']} **/
 	mount(container, eventHandlerContext) {
 		container.innerHTML = this.toString()
 		this.hydrate(container, eventHandlerContext)
@@ -1054,15 +1051,13 @@ export class DynamicFragment {
 	/** @type {string?} */
 	#key = null
 
-	/** @param {string|number} key */
+	/** @type {DynamicFragmentClass['key']} */
 	key(key) {
 		this.#key = String(key)
 		return this
 	}
 
-	/**
-	 * @param {Range|HTMLElement|ShadowRoot} location
-	 **/
+	/** @type {DynamicFragmentClass['restoreIn']} */
 	restoreIn(location) {
 
 		if (!this.#nodes) throw new Error('No nodes to insert. Was this fragment ever mounted?')
@@ -1099,6 +1094,10 @@ export class DynamicFragment {
 		return this.#values
 	}
 
+	get strings() {
+		return this.#strings
+	}
+
 	get isStatic() {
 		return this.strings.length == 1 && this.values.length == 0
 	}
@@ -1107,7 +1106,7 @@ export class DynamicFragment {
 		return this.#getHtmlString()
 	}
 
-	/** @type {string} */
+	/** @type {DynamicFragmentClass['staticHtmlString']} */
 	get staticHtmlString() {
 
 		return this.strings.reduce((total, nextStringLiteral, index) => {

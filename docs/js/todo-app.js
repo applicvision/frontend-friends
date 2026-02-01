@@ -1,5 +1,4 @@
-import { html, island } from '@applicvision/frontend-friends'
-import { twoway } from '@applicvision/frontend-friends'
+import { html, island, twoway } from '@applicvision/frontend-friends'
 import { effect } from '@applicvision/frontend-friends/deep-watch'
 import './todo-box.js'
 import { shape } from '@applicvision/frontend-friends/parse-shape'
