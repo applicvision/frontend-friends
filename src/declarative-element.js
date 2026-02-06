@@ -78,11 +78,14 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	/** @private */
 	static get stylesheets() {
 		if (!this._stylesheets) {
-
-			const styles = /** @type {StyleDeclaration[]} */([]).concat(this.style)
-			this._stylesheets = styles.map(style => style.styleSheet)
+			this._stylesheets = this._stylesArray.map(style => style.styleSheet)
 		}
 		return this._stylesheets
+	}
+
+	/** @private */
+	static get _stylesArray() {
+		return /** @type {StyleDeclaration[]} */([]).concat(this.style)
 	}
 
 
@@ -155,6 +158,21 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 			this.#mounted = true
 		}
 	}
+
+
+	/** @type {DeclarativeElementClass['adoptedCallback']} */
+	adoptedCallback(oldDocument, newDocument) {
+		const context = newDocument.defaultView
+		const componentClass = this.#componentClass
+		if (!context || !componentClass.stylesheets.length || this.shadowRoot?.adoptedStyleSheets.length != 0) {
+			return
+		}
+
+		this.shadowRoot.adoptedStyleSheets = newDocument == document ?
+			componentClass.stylesheets :
+			componentClass._stylesArray.map(style => style.makeStyleSheetInContext(context))
+	}
+
 
 	/** @type {DeclarativeElementClass['attributeChangedCallback']} */
 	attributeChangedCallback(attributeName, oldValue, newValue) {
@@ -279,6 +297,14 @@ class StyleDeclaration {
 			this.#stylesheet.replaceSync(this.toString())
 		}
 		return this.#stylesheet
+	}
+
+
+	/** @type {StyleDeclarationClass['makeStyleSheetInContext']} */
+	makeStyleSheetInContext(context) {
+		const sheet = new context.CSSStyleSheet()
+		sheet.replaceSync(this.toString())
+		return sheet
 	}
 
 	toString() {

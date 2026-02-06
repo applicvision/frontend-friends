@@ -103,7 +103,9 @@ describe('Declarative Element component', () => {
 
 	it('Should be styled', () => {
 		const element = new ColorfulElement
+		expect(element.isMounted).to.be.false()
 		testContainer.replaceChildren(element)
+		expect(element.isMounted).to.be.true()
 		expect(getComputedStyle(firstShadowElement(element)).backgroundColor).to.equal('rgb(0, 128, 0)')
 		expect(getComputedStyle(firstShadowElement(element)).color).to.equal('rgb(255, 255, 0)')
 		expect(getComputedStyle(firstShadowElement(element)).margin).to.equal('5px')

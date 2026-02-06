@@ -25,6 +25,8 @@ export class InnerCSS {
 export class StyleDeclaration {
 	constructor(strings: TemplateStringsArray, ...nestedParts: (StyleDeclaration | InnerCSS)[])
 	get styleSheet(): CSSStyleSheet
+
+	makeStyleSheetInContext(context: typeof globalThis): CSSStyleSheet
 }
 
 type BaseAttributeDescriptor = { attribute: string, attributeStart: number, elementName: string, quotemark: '"' | "'" | '', prefix: string, suffix: string }
