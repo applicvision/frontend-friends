@@ -1,3 +1,5 @@
+/** @import {tokens as TokensFunc, style as StyleFunc} from '../types/src/attribute-helpers.js' */
+
 /**
  * @param {{[key: string]: unknown} | string} definition
  * @param {Set<string>} tokenSet
@@ -23,9 +25,7 @@ function addTokensFromString(stringWithTokens, tokenSet) {
 }
 
 
-/**
- * @param {({[key: string]: unknown} | string | ({[key: string]: unknown} | string)[])[]} definitionParts
- */
+/** @type {TokensFunc} */
 export function tokens(...definitionParts) {
 
 	const tokenSet = new Set()
@@ -53,7 +53,7 @@ function convertToCSSCasing(pascalCase) {
 		.replaceAll(CAP_REGEX, (char) => `-${char.toLowerCase()}`)
 }
 
-/** @param {{[key in keyof CSSStyleDeclaration]?: string|number|null|undefined|false}} declaration */
+/** @type {StyleFunc} */
 export function style(declaration) {
 	return Object.entries(declaration)
 		.filter(([_, value]) => value || value === 0)

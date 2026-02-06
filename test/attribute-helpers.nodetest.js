@@ -49,8 +49,8 @@ describe('Attribte helpers', () => {
 
 		it('Should remove falsy entries, except 0', () => {
 			assert.equal(
-				style({ minWidth: 0, opacity: '', webkitLineClamp: null, animationDuration: 2.3 }),
-				'min-width: 0; animation-duration: 2.3'
+				style({ minWidth: '0', opacity: '', webkitLineClamp: undefined, animationDuration: '2.3s' }),
+				'min-width: 0; animation-duration: 2.3s'
 			)
 		})
 	})

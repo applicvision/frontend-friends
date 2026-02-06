@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "checkJs": true,
+    "allowJs": true,
+    "maxNodeModuleJsDepth": 1,
+    "noEmit": true,
     "module": "NodeNext",
     "target": "ESNext",
     "strict": true,

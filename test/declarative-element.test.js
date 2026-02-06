@@ -1,8 +1,8 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
 import expect from '@applicvision/js-toolbox/expect'
 import { spy } from '@applicvision/js-toolbox/function-spy'
-import { DeclarativeElement, css, innerCSS } from '../src/declarative-element.js'
-import { html } from '../src/dynamic-fragment.js'
+import { html, css, DeclarativeElement } from '@applicvision/frontend-friends'
+import { innerCSS } from '@applicvision/frontend-friends/declarative-element'
 import { addTestContainer, shadowText } from './helpers.js'
 
 

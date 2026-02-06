@@ -1,10 +1,11 @@
-import { DynamicFragment, html } from '@applicvision/frontend-friends/dynamic-fragment'
+import { html } from '@applicvision/frontend-friends/dynamic-fragment'
 import { autoSubscribe as storeSubscribe } from '@applicvision/frontend-friends/store'
 import { autoSubscribe as routeSubscribe } from '@applicvision/frontend-friends/base-router'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 
 /**
- * @import {AutoSubscriber, AnyStore as ResourceStore} from './store.js'
+ * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
+ * @import {AutoSubscriber, AnyStore as ResourceStore} from '../types/src/store.js'
  * @import {RouteSubscriber, AnyRoute} from './router/base-router.js'
  */
 
@@ -198,28 +199,9 @@ export class DynamicIsland extends EventTarget {
 }
 
 
-/**
- * @overload
- * @param {() => DynamicFragment} renderFunction
- * @returns {DynamicIsland<{}>}
- */
-
-/**
- * @template {{state?: object}} T
- * @overload
- * @param {() => T} setup
- * @param {(state: T) => DynamicFragment} renderFunction
- * @returns {DynamicIsland<T>}
-*/
-
-/**
- * @template {{state?: object}} T
- * @param {() => DynamicFragment | (() => T)} setupOrRender
- * @param {(state: T) => DynamicFragment} [renderFunction]
- */
+// @ts-expect-error This function is typed in the d.ts file
 export function island(setupOrRender, renderFunction) {
-	if (renderFunction) {
-		// const setup = setupOrRender
+	if (typeof renderFunction == 'function') {
 		return new DynamicIsland(setupOrRender, renderFunction)
 	}
 	return new DynamicIsland(() => ({}), setupOrRender)
