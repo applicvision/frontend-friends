@@ -1,7 +1,7 @@
 import { specialAttributes } from '@applicvision/frontend-friends/special-attributes'
 
 const attributeRegex = /(?<attribute>[a-zA-Z0-9-]+)\s*=\s*((?<quotemark>["'])(?<prefix>[^"']*))?$/
-const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+([a-zA-Z0-9-]+(=|(\s*=\s*"[^"]*")|(\s*=\s*'[^']*')|(=[^'"\s]+))?\s+)*$/
+const elementForAttributeRegex = /<(?<element>[a-zA-Z-]+)\s+(?:[a-zA-Z0-9-]+\s*(=|=\s*"[^"]*"|=\s*'[^']*'|=[^'"\s]+)?\s+)*$/
 
 const commentPrefix = 'dynamic-fragment'
 const contentCommentPrefix = `${commentPrefix}:content:`

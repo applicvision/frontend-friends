@@ -46,10 +46,11 @@ describe('Dynamic Fragment Parsing', () => {
 		expect(testContainer.textContent).to.equal('< test="value')
 	})
 
-	it('Should handle spacing in attributes', () => {
-		const fragment = html`<div class = "${'test'}">content</div>`
+	it.only('Should handle spacing in attributes', () => {
+		const fragment = html`<div class = ${'test'} hidden = ${false}>content</div>`
 		fragment.mount(testContainer)
 		expect(testContainer.firstElementChild?.className).to.equal('test')
+		expect(testContainer.textContent).to.equal('content')
 	})
 
 	it('Should handle comment injection attempts', () => {
