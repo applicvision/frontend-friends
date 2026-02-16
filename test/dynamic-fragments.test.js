@@ -140,7 +140,7 @@ describe('Dynamic fragments', () => {
 
 		/** @param {string} title */
 		function makeDynamicFragment(title) {
-			return html`<h1>${title}</h2>`
+			return html`<h2>${title}</h2>`
 		}
 
 		const dyn1 = makeDynamicFragment('Dyn1')
@@ -220,10 +220,10 @@ describe('Dynamic fragments', () => {
 	})
 
 	it('boolean attributes', () => {
-		const fragment = html`<div hidden=${true}>hello</div>`
+		const fragment = html`<h1 hidden=${true}>hello</h1>`
 		fragment.mount(testContainer)
 
-		let theDiv = testContainer.querySelector('div')
+		let theDiv = testContainer.querySelector('h1')
 
 		expect(theDiv?.hidden).to.be.true()
 		fragment.values = [false]
