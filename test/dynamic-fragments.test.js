@@ -252,7 +252,7 @@ describe('Dynamic fragments', () => {
 	it('event handler', () => {
 		let clicked = false
 		const clickHandler = () => clicked = true
-		const fragment = html`<button onclick=${clickHandler}>tryck</button>${null}`
+		const fragment = html`<button onclick="${clickHandler}">tryck</button>${null}`
 		fragment.mount(testContainer)
 
 		testContainer.querySelector('button')?.click()

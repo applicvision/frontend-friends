@@ -154,7 +154,9 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	connectedCallback() {
 		if (!this.isMounted) {
+			this.#isRendering = true
 			this.#internalRender()
+			this.#isRendering = false
 			this.#mounted = true
 		}
 	}
@@ -209,7 +211,9 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	pendingUpdate = null
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
+			this.#isRendering = true
 			this.#internalRender()
+			this.#isRendering = false
 			this.pendingUpdate = null
 			this.componentDidUpdate()
 		})
@@ -235,9 +239,8 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	#internalRender() {
 		if (!this.shadowRoot) return
 
-		this.#isRendering = true
 		const dynamicFragment = this.render()
-		this.#isRendering = false
+
 		if (!this.#currentFragment) {
 			dynamicFragment.mount(this.shadowRoot, this)
 			this.#currentFragment = dynamicFragment

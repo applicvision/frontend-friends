@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewport="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="backgroundGradient" gradientTransform="rotate(90)">
+      <stop offset="0" stop-color="#222" />
+      <stop offset="1" stop-color="#444" />
+    </linearGradient>
+  </defs>
+	<!-- <rect x="0" y="0" width="512" height="512" /> -->
+	<circle fill="url(#backgroundGradient)" id="background" cx="256" cy="256" r="220" />
+	<g display="none" id="guide" stroke="#fff6" stroke-width="2" stroke-dasharray="5 5" fill="none">
+		<line x1="0" y1="0" x2="512" y2="512" />
+		<line x1="512" y1="0" x2="0" y2="512" />
+		<line x1="0" x2="512" y1="256" y2="256"  />
+		<line y1="0" y2="512" x1="256" x2="256"  />
+		<circle cx="256" cy="256" r="150" />
+
+		<line x1="0" x2="512" y1="380" y2="380"  />
+		<line x1="0" x2="512" y1="132" y2="132"  />
+	</g>
+	<defs>
+	</defs>
+	<g stroke="#bbb" stroke-width="20" stroke-linecap="round" fill="none" filter="drop-shadow(0px 0px 10px #0008)">
+		<path id="chevronLeft" d="M 230,272 l -50,50 l 50,50" />
+		<path id="chevronRight" d="M 282,272 l 50,50 l -50,50" />
+		<path id="bigChevronLeft" d="M 162,304 l -65,-65 l 65,-65" />
+		<path id="curveRight" d="M 350,304 l 65,-65 l -65,-65" />
+	</g>
+</svg>
