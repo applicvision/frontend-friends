@@ -4,7 +4,10 @@
   "description": "Build frontend easily",
   "type": "module",
   "license": "MIT",
-  "repository": "github:applicvision/frontend-friends",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/applicvision/frontend-friends.git"
+  },
   "main": "./src/index.js",
   "exports": {
     ".": {
