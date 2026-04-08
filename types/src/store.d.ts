@@ -1,7 +1,7 @@
 
 export type StoreSubscriber = { storeChanged: (store: ResourceStore<any>) => void }
 
-export type AutoSubscriber = StoreSubscriber & { subscriptions: Set<ResourceStore<any>> }
+export type AutoSubscriber = StoreSubscriber & { subscriptions: Map<ResourceStore<any>, Set<string>> }
 
 export type AnyStore = ResourceStore<any>
 

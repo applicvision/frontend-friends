@@ -21,14 +21,12 @@ class ResourceStore {
 
 	/**
 	 * @param {string} id
-	 * @param {StoreSubscriber=} subscriber
 	 */
-	get(id, subscriber) {
+	get(id) {
+		const subscriber = autoSubscribers.at(-1)
 		if (subscriber) {
 			this.subscribe(id, subscriber)
-		} else if (autoSubscriber) {
-			this.subscribe(id, autoSubscriber)
-			autoSubscriber.subscriptions.add(this)
+			subscriber.subscriptions.getOrInsert(this, new Set()).add(id)
 		}
 		return this.#state[id]
 	}
@@ -160,20 +158,27 @@ export function unsubscribe(store, listener) {
 	Object.values(store).forEach(resourceStore => resourceStore.unsubscribeAll(listener))
 }
 
-/** @type {AutoSubscriber | null} */
-let autoSubscriber = null
+/** @type {AutoSubscriber[]} */
+const autoSubscribers = []
 
 
 /**
- * @template T
  * @param {AutoSubscriber} subscriber
- * @param {() => T} callback
+ * @param {Function} callback
  */
 export function autoSubscribe(subscriber, callback) {
-	autoSubscriber = subscriber
-	const returnValue = callback()
-	autoSubscriber = null
-	return returnValue
+	autoSubscribers.push(subscriber)
+	callback()
+	autoSubscribers.pop()
+}
+
+/**
+ * @param {AutoSubscriber} subscriber
+ */
+export function clearSubscriber(subscriber) {
+	subscriber.subscriptions.entries().forEach(([store, ids]) => {
+		ids.forEach(id => store.unsubscribe(id, subscriber))
+	})
 }
 
 /**

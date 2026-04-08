@@ -1,19 +1,17 @@
-import { AutoSubscriber, ResourceStore } from "./store.js";
+import { ResourceStore } from "./store.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
 
-export class DynamicIsland<T extends { [key: string]: any, state?: object }> extends EventTarget implements AutoSubscriber {
-	constructor(setup: () => T, renderFunction: (state: T) => DynamicFragment)
+export class DynamicIsland<T extends object | string | number | boolean | null = null> extends EventTarget {
+	constructor(initialState: T, renderFunction: (state: T) => DynamicFragment)
 
 	readonly pendingUpdate: Promise<any> | null
 	invalidate(): Promise<any>
 
 	storeChanged: (store: ResourceStore<any>) => void
 
-	subscriptions: Set<ResourceStore<any>>
+	set state(state: T)
 
-	set state(state: T['state'])
-
-	get state(): T['state']
+	get state(): T
 
 	mount(container: HTMLElement): void
 
@@ -29,12 +27,12 @@ export class DynamicIsland<T extends { [key: string]: any, state?: object }> ext
 
 export function island(
 	render: () => DynamicFragment
-): DynamicIsland<{}>
-export function island<T extends { state?: object }>(
-	setup: () => T,
+): DynamicIsland
+export function island<T extends object | string | number | boolean>(
+	initialState: T,
 	render: (state: T) => DynamicFragment
 ): DynamicIsland<T>
 export function island<T extends { state?: object }>(
-	setupOrRender: () => DynamicFragment | (() => T),
+	stateOrRender: () => DynamicFragment | (() => T),
 	renderFunction?: (state: T) => DynamicFragment
 ): DynamicIsland<T>

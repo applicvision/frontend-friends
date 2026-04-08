@@ -24,33 +24,32 @@ describe('Dynamic island', () => {
 
 	it('island connected to store', async () => {
 
-		const island = new DynamicIsland(() => ({
-			tuva: store.user.get('1')
-		}), (state) => html`<h2>name: ${state.tuva.name} age: ${state.tuva.age}</h2>`)
+		const storeIsland = island(() => {
+			const tuva = store.user.get('1')
+			return html`<h2>name: ${tuva.name} age: ${tuva.age}</h2>`
+		})
 
-		island.mount(testContainer)
+		storeIsland.mount(testContainer)
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 0')
 
 		store.user.update('1', { age: 1 })
 
-		await island.pendingUpdate
+		await storeIsland.pendingUpdate
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 1')
 
-		island.unmount()
+		storeIsland.unmount()
 
 		expect(testContainer.textContent).to.be.empty()
 	})
 
 	it('island with state', async () => {
-		const island = new DynamicIsland(() => ({
-			state: {
-				name: 'Tuva',
-				age: 0
-			}
-		}),
-			({ state }) => html`<h2>name: ${state.name} age: ${state.age}</h2>`
+		const island = new DynamicIsland({
+			name: 'Tuva',
+			age: 0
+		},
+			(state) => html`<h2>name: ${state.name} age: ${state.age}</h2>`
 		)
 
 		island.mount(testContainer)
@@ -66,11 +65,9 @@ describe('Dynamic island', () => {
 
 	it('chained state', async () => {
 		const state = { age: 0 }
-		const island1 = island(
-			() => ({ state }), ({ state }) => html`<h2>${state.age}</h2>`
+		const island1 = island(state, (state) => html`<h2>${state.age}</h2>`
 		)
-		const island2 = island(
-			() => ({ state: island1.state }), ({ state }) => html`<h3>${state.age}</h3>`
+		const island2 = island(island1.state, (state) => html`<h3>${state.age}</h3>`
 		)
 		const div1 = document.createElement('div')
 		const div2 = document.createElement('div')
@@ -97,9 +94,8 @@ describe('Dynamic island', () => {
 
 	it('alternating fragments uses cache', async () => {
 
-		const anIsland = island(
-			() => ({ state: { loading: true } }),
-			({ state }) => {
+		const anIsland = island({ loading: true },
+			(state) => {
 				if (state.loading) {
 					return html`<div>loading...</div>`
 				}

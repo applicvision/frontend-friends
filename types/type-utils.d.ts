@@ -68,3 +68,14 @@ export type KeyPath<T extends object> = T extends Map<any, any> ? [`Map[${string
 	{ [K in keyof T]:
 		[K, ...(T[K] extends object ? KeyPath<T[K]> : [])]
 	}[keyof T]
+
+
+export interface Invalidatable {
+	invalidate: () => {}
+}
+
+export interface RenderHook {
+	name: string
+	hook: (context: Invalidatable, render: () => void) => void
+	cleanup?: () => void
+}

@@ -2,16 +2,41 @@ import { html } from '@applicvision/frontend-friends/dynamic-fragment'
 import { autoSubscribe as storeSubscribe } from '@applicvision/frontend-friends/store'
 import { autoSubscribe as routeSubscribe } from '@applicvision/frontend-friends/base-router'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
+import { clearSubscriber } from './store.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
  * @import {AutoSubscriber, AnyStore as ResourceStore} from '../types/src/store.js'
  * @import {RouteSubscriber, AnyRoute} from './router/base-router.js'
+ * @import {Invalidatable, RenderHook} from '../types/type-utils.js'
  */
 
+/** @return {RenderHook} **/
+function makeStoreHook() {
+
+	/** @type {Invalidatable} */
+	let invalidatable
+
+	const subscriber = {
+		subscriptions: new Map(),
+		storeChanged() {
+			invalidatable.invalidate()
+		}
+	}
+	return {
+		name: 'store',
+		hook(context, render) {
+			invalidatable ??= context
+			storeSubscribe(subscriber, render)
+		},
+		cleanup() {
+			clearSubscriber(subscriber)
+		}
+	}
+}
+
 /**
- * @template {{[key: string]: any, state?: object}} T
- * @implements {AutoSubscriber}
+ * @template {object|string|number|boolean|null} [T=null]
  * @implements {RouteSubscriber}
  **/
 export class DynamicIsland extends EventTarget {
@@ -19,32 +44,23 @@ export class DynamicIsland extends EventTarget {
 	/** @type {HTMLElement?} */
 	#container = null
 
-	/** @type {Omit<T, "state">?} */
-	#renderProps = null
-
-	/** @type {T['state']?} */
-	#state = null
-
-	/** @type {Set<ResourceStore>} */
-	subscriptions = new Set()
+	/** @type {T} */
+	#state
 
 	/** @type {AnyRoute | null} */
 	routeSubscription = null
 
 	#render
 
-	#setup
-
 	/**
-	 * @param {() => T} setup
+	 * @param {T} state
 	 * @param {((state: T) => ReturnType<html>)} renderFunction
 	 */
-	constructor(setup, renderFunction) {
+	constructor(state, renderFunction) {
 		super()
+		this.#state = this.#watchedState(state)
 		this.#render = renderFunction
-		this.#setup = setup
-
-		this.#reactiveSetup()
+		this.registerHook(makeStoreHook())
 	}
 
 	/** @type {Promise<any>|null} */
@@ -52,7 +68,7 @@ export class DynamicIsland extends EventTarget {
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
 			// console.time('render')
-			this.#internalRender()
+			this.#renderWithHooks()
 			// console.timeEnd('render')
 			this.pendingUpdate = null
 			// TODO: maybe signal update
@@ -64,34 +80,39 @@ export class DynamicIsland extends EventTarget {
 	}
 
 	routeChanged() {
-		const { state, ...otherProps } = this.#setup()
-		this.#renderProps = otherProps
-		this.state = state
-		this.#internalRender()
+		// const { state, ...otherProps } = this.#setup()
+		// this.#renderProps = otherProps
+		// this.state = state
+		// this.#internalRender()
 	}
 
-	set state(state) {
-		this.#state = deepWatch(state ?? {}, (keypath, newValue, oldValue) => {
+	/** @type {RenderHook[]} */
+	#renderHooks = []
+
+	/** @param {RenderHook} hook */
+	registerHook(hook) {
+		this.#renderHooks.push(hook)
+	}
+
+	/** @param {T} state */
+	#watchedState(state) {
+		return state && typeof state == 'object' ? deepWatch(state, (keypath, newValue, oldValue) => {
 			if (newValue !== oldValue) {
 				this.invalidate()
 				this.dispatchEvent(new CustomEvent('statechange', { detail: { keypath } }))
 			}
-		})
+		}) : state
 	}
 
-	/** @type {T['state']} */
+	set state(state) {
+		this.#state = this.#watchedState(state)
+		if (this.isMounted) {
+			this.invalidate()
+		}
+	}
+
 	get state() {
-		// @ts-ignore
 		return this.#state
-	}
-
-	#reactiveSetup() {
-		const { state, ...otherProps } = routeSubscribe(
-			this,
-			() => storeSubscribe(this, this.#setup))
-
-		this.#renderProps = otherProps
-		this.state = state
 	}
 
 	/** @param {HTMLElement} container */
@@ -106,7 +127,7 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.#container = container
 
-		this.#internalRender()
+		this.#renderWithHooks()
 		this.dispatchEvent(new Event('mount'))
 	}
 
@@ -114,25 +135,23 @@ export class DynamicIsland extends EventTarget {
 		return this.#container
 	}
 
+	get isMounted() {
+		return Boolean(this.container)
+	}
+
 	/**
 	 * @param {HTMLElement} container
 	 **/
 	hydrate(container) {
 
-		this.#reactiveSetup()
-
-		/** @type {T} */
-		// @ts-ignore
-		const renderArg = { ...this.#renderProps, state: this.state }
-
-		const dynamicFragment = this.#render(renderArg)
+		const dynamicFragment = this.#render(this.state)
 		dynamicFragment.hydrate(container)
 		this.#currentFragment = dynamicFragment
 		this.#container = container
 	}
 
 	get hydratable() {
-		return this.#render(this.#setup()).toString()
+		return this.#render(this.state).toString()
 	}
 
 
@@ -144,10 +163,9 @@ export class DynamicIsland extends EventTarget {
 		}
 
 		// remove subscriptions
-		this.subscriptions.forEach(store => store.unsubscribeAll(this))
 		this.routeSubscription?.unsubscribe(this)
-		this.subscriptions.clear()
 		this.routeSubscription = null
+		this.#renderHooks.forEach(hook => hook.cleanup?.())
 
 		if (this.container) {
 			this.container.innerHTML = ''
@@ -168,13 +186,10 @@ export class DynamicIsland extends EventTarget {
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
 	#internalRender() {
+
 		if (!this.container) return
 
-		/** @type {T} */
-		// @ts-ignore
-		const renderArg = { ...this.#renderProps, state: this.state }
-
-		const dynamicFragment = this.#render(renderArg)
+		const dynamicFragment = this.#render(this.state)
 
 		if (dynamicFragment.strings == this.#currentFragment?.strings) {
 			// update values
@@ -196,15 +211,48 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.dispatchEvent(new Event('update'))
 	}
-}
 
-
-// @ts-expect-error This function is typed in the d.ts file
-export function island(setupOrRender, renderFunction) {
-	if (typeof renderFunction == 'function') {
-		return new DynamicIsland(setupOrRender, renderFunction)
+	#renderWithHooks(hookIndex = 0) {
+		const hook = this.#renderHooks[hookIndex]
+		let called = false
+		if (hook) {
+			hook.hook(this, () => {
+				if (called) throw new Error('Render called multiple times in hook: ' + hook.name)
+				called = true
+				this.#renderWithHooks(hookIndex + 1)
+			})
+		} else {
+			this.#internalRender()
+		}
 	}
-	return new DynamicIsland(() => ({}), setupOrRender)
 }
 
+/**
+ * @overload
+ * @param {() => DynamicFragment} renderFunction
+ * @returns {DynamicIsland}
+ */
+
+/**
+ * @template {object|string|number|boolean} T
+ * @overload
+ * @param {T} initialState
+ * @param {(state: T) => DynamicFragment} renderFunction
+ * @returns {DynamicIsland<T>}
+*/
+
+/**
+ * @template {object} T
+ * @param {(() => DynamicFragment) | T} stateOrRender
+ * @param {(state: T) => DynamicFragment} [renderFunction]
+ */
+export function island(stateOrRender, renderFunction) {
+	if (typeof renderFunction == 'function' && typeof stateOrRender == 'object') {
+		return new DynamicIsland(stateOrRender, renderFunction)
+	}
+	return new DynamicIsland(
+		null,
+		/** @type {(state: null) => DynamicFragment} */(stateOrRender)
+	)
+}
 
