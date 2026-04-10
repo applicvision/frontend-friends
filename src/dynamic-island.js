@@ -1,39 +1,12 @@
 import { html } from '@applicvision/frontend-friends/dynamic-fragment'
-import { autoSubscribe as storeSubscribe } from '@applicvision/frontend-friends/store'
-import { autoSubscribe as routeSubscribe } from '@applicvision/frontend-friends/base-router'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { clearSubscriber } from './store.js'
+import { makeStoreHook, runWithHooks } from './render-hooks.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
- * @import {AutoSubscriber, AnyStore as ResourceStore} from '../types/src/store.js'
  * @import {RouteSubscriber, AnyRoute} from './router/base-router.js'
- * @import {Invalidatable, RenderHook} from '../types/type-utils.js'
+ * @import {RenderHook} from '../types/type-utils.js'
  */
-
-/** @return {RenderHook} **/
-function makeStoreHook() {
-
-	/** @type {Invalidatable} */
-	let invalidatable
-
-	const subscriber = {
-		subscriptions: new Map(),
-		storeChanged() {
-			invalidatable.invalidate()
-		}
-	}
-	return {
-		name: 'store',
-		hook(context, render) {
-			invalidatable ??= context
-			storeSubscribe(subscriber, render)
-		},
-		cleanup() {
-			clearSubscriber(subscriber)
-		}
-	}
-}
 
 /**
  * @template {object|string|number|boolean|null} [T=null]
@@ -68,15 +41,11 @@ export class DynamicIsland extends EventTarget {
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
 			// console.time('render')
-			this.#renderWithHooks()
+			this.#internalRender()
 			// console.timeEnd('render')
 			this.pendingUpdate = null
 			// TODO: maybe signal update
 		})
-	}
-
-	storeChanged() {
-		this.invalidate()
 	}
 
 	routeChanged() {
@@ -96,7 +65,7 @@ export class DynamicIsland extends EventTarget {
 
 	/** @param {T} state */
 	#watchedState(state) {
-		return state && typeof state == 'object' ? deepWatch(state, (keypath, newValue, oldValue) => {
+		return typeof state == 'object' && state != null ? deepWatch(state, (keypath, newValue, oldValue) => {
 			if (newValue !== oldValue) {
 				this.invalidate()
 				this.dispatchEvent(new CustomEvent('statechange', { detail: { keypath } }))
@@ -127,7 +96,7 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.#container = container
 
-		this.#renderWithHooks()
+		this.#internalRender()
 		this.dispatchEvent(new Event('mount'))
 	}
 
@@ -143,11 +112,12 @@ export class DynamicIsland extends EventTarget {
 	 * @param {HTMLElement} container
 	 **/
 	hydrate(container) {
-
-		const dynamicFragment = this.#render(this.state)
-		dynamicFragment.hydrate(container)
-		this.#currentFragment = dynamicFragment
-		this.#container = container
+		runWithHooks(this, this.#renderHooks, () => {
+			const dynamicFragment = this.#render(this.state)
+			dynamicFragment.hydrate(container)
+			this.#currentFragment = dynamicFragment
+			this.#container = container
+		})
 	}
 
 	get hydratable() {
@@ -187,43 +157,33 @@ export class DynamicIsland extends EventTarget {
 	#currentFragment = null
 	#internalRender() {
 
-		if (!this.container) return
+		const { container } = this
 
-		const dynamicFragment = this.#render(this.state)
+		if (!container) return
 
-		if (dynamicFragment.strings == this.#currentFragment?.strings) {
-			// update values
-			this.#currentFragment.values = dynamicFragment.values
-		} else {
-			this.#cacheIsland()
+		runWithHooks(this, this.#renderHooks, () => {
 
-			const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+			const dynamicFragment = this.#render(this.state)
 
-			if (reusableFragment) {
-				reusableFragment.restoreIn(this.container)
-				this.#currentFragment = reusableFragment
+			if (dynamicFragment.strings == this.#currentFragment?.strings) {
+				// update values
 				this.#currentFragment.values = dynamicFragment.values
 			} else {
-				dynamicFragment.mount(this.container)
-				this.#currentFragment = dynamicFragment
+				this.#cacheIsland()
+
+				const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+
+				if (reusableFragment) {
+					reusableFragment.restoreIn(container)
+					this.#currentFragment = reusableFragment
+					this.#currentFragment.values = dynamicFragment.values
+				} else {
+					dynamicFragment.mount(container)
+					this.#currentFragment = dynamicFragment
+				}
 			}
-
-		}
+		})
 		this.dispatchEvent(new Event('update'))
-	}
-
-	#renderWithHooks(hookIndex = 0) {
-		const hook = this.#renderHooks[hookIndex]
-		let called = false
-		if (hook) {
-			hook.hook(this, () => {
-				if (called) throw new Error('Render called multiple times in hook: ' + hook.name)
-				called = true
-				this.#renderWithHooks(hookIndex + 1)
-			})
-		} else {
-			this.#internalRender()
-		}
 	}
 }
 
@@ -242,12 +202,12 @@ export class DynamicIsland extends EventTarget {
 */
 
 /**
- * @template {object} T
+ * @template {object|string|number|boolean} T
  * @param {(() => DynamicFragment) | T} stateOrRender
  * @param {(state: T) => DynamicFragment} [renderFunction]
  */
 export function island(stateOrRender, renderFunction) {
-	if (typeof renderFunction == 'function' && typeof stateOrRender == 'object') {
+	if (typeof renderFunction == 'function' && typeof stateOrRender != 'function') {
 		return new DynamicIsland(stateOrRender, renderFunction)
 	}
 	return new DynamicIsland(

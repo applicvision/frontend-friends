@@ -26,7 +26,13 @@ class ResourceStore {
 		const subscriber = autoSubscribers.at(-1)
 		if (subscriber) {
 			this.subscribe(id, subscriber)
-			subscriber.subscriptions.getOrInsert(this, new Set()).add(id)
+			// Can be replaced with getOrInsert
+			let storeSubscriptions = subscriber.subscriptions.get(this)
+			if (!storeSubscriptions) {
+				storeSubscriptions = new Set()
+				subscriber.subscriptions.set(this, storeSubscriptions)
+			}
+			storeSubscriptions.add(id)
 		}
 		return this.#state[id]
 	}
@@ -168,8 +174,11 @@ const autoSubscribers = []
  */
 export function autoSubscribe(subscriber, callback) {
 	autoSubscribers.push(subscriber)
-	callback()
-	autoSubscribers.pop()
+	try {
+		callback()
+	} finally {
+		autoSubscribers.pop()
+	}
 }
 
 /**
@@ -179,6 +188,7 @@ export function clearSubscriber(subscriber) {
 	subscriber.subscriptions.entries().forEach(([store, ids]) => {
 		ids.forEach(id => store.unsubscribe(id, subscriber))
 	})
+	subscriber.subscriptions.clear()
 }
 
 /**

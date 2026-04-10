@@ -1,9 +1,10 @@
 import { twoway, html } from '@applicvision/frontend-friends'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
+import { makeStoreHook, runWithHooks } from './render-hooks.js'
 
 /**
  * @import {StoreSubscriber} from '../types/src/store.js'
- * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass} from '../types/type-utils.js'
+ * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, RenderHook} from '../types/type-utils.js'
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
  * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
@@ -46,6 +47,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		if (sharedStateName) {
 			this.#internals = this.attachInternals()
 		}
+		this.registerHook(makeStoreHook())
 	}
 
 
@@ -86,12 +88,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	/** @private */
 	static get _stylesArray() {
 		return /** @type {StyleDeclaration[]} */([]).concat(this.style)
-	}
-
-
-	#mounted = false
-	get isMounted() {
-		return this.#mounted
 	}
 
 	/** @type {TwowayBinding|object?} */
@@ -153,12 +149,9 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	connectedCallback() {
-		if (!this.isMounted) {
-			this.#isRendering = true
-			this.#internalRender()
-			this.#isRendering = false
-			this.#mounted = true
-		}
+		this.#isRendering = true
+		this.#internalRender()
+		this.#isRendering = false
 	}
 
 
@@ -178,15 +171,14 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	/** @type {DeclarativeElementClass['attributeChangedCallback']} */
 	attributeChangedCallback(attributeName, oldValue, newValue) {
-		if (this.isMounted) {
-			this.invalidate()
-		}
+		this.invalidate()
 	}
 
 	/** @type {DeclarativeElementClass['twoway']} */
 	twoway(state, property, toTransform, fromTransform) {
 		return twoway(state, property, toTransform, fromTransform, this)
 	}
+
 
 	/** 
 	 * Implement this function to generate content for your component
@@ -211,10 +203,13 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	pendingUpdate = null
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
+			this.pendingUpdate = null
+
+			if (!this.isConnected) return
+
 			this.#isRendering = true
 			this.#internalRender()
 			this.#isRendering = false
-			this.pendingUpdate = null
 			this.componentDidUpdate()
 		})
 	}
@@ -235,37 +230,55 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		return this.#isRendering
 	}
 
+	/** @type {RenderHook[]} */
+	#renderHooks = []
+
+	/** @param {RenderHook} hook */
+	registerHook(hook) {
+		this.#renderHooks.push(hook)
+	}
+
 	#isRendering = false
 	#internalRender() {
-		if (!this.shadowRoot) return
+		const { shadowRoot } = this
 
-		const dynamicFragment = this.render()
+		if (!shadowRoot) return
 
-		if (!this.#currentFragment) {
-			dynamicFragment.mount(this.shadowRoot, this)
-			this.#currentFragment = dynamicFragment
-			return
-		}
-		if (dynamicFragment.strings == this.#currentFragment.strings) {
-			// update values
-			this.#currentFragment.values = dynamicFragment.values
-		} else {
+		runWithHooks(this, this.#renderHooks, () => {
 
-			// cache the previous dynamic fragment
-			this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 
-			// either restore from cache or mount new fragment
-			const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+			const dynamicFragment = this.render()
 
-			if (reusableFragment) {
-				reusableFragment.restoreIn(this.shadowRoot)
-				this.#currentFragment = reusableFragment
+			if (!this.#currentFragment) {
+				dynamicFragment.mount(shadowRoot, this)
+				this.#currentFragment = dynamicFragment
+				return
+			}
+			if (dynamicFragment.strings == this.#currentFragment.strings) {
+				// update values
 				this.#currentFragment.values = dynamicFragment.values
 			} else {
-				dynamicFragment.mount(this.shadowRoot, this)
-				this.#currentFragment = dynamicFragment
+
+				// cache the previous dynamic fragment
+				this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
+
+				// either restore from cache or mount new fragment
+				const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+
+				if (reusableFragment) {
+					reusableFragment.restoreIn(shadowRoot)
+					this.#currentFragment = reusableFragment
+					this.#currentFragment.values = dynamicFragment.values
+				} else {
+					dynamicFragment.mount(shadowRoot, this)
+					this.#currentFragment = dynamicFragment
+				}
 			}
-		}
+		})
+	}
+
+	disconnectedCallback() {
+		this.#renderHooks.forEach(hook => hook.cleanup?.())
 	}
 }
 

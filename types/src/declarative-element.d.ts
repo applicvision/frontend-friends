@@ -22,8 +22,6 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 
 	get isRendering(): boolean
 
-	get isMounted(): boolean
-
 	protected componentDidUpdate(): void
 
 	reactive<T extends object>(object: T, effect?: (keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void): T
@@ -37,6 +35,8 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 	set sharedState(newValue: SharedState)
 
 	connectedCallback(): void
+
+	disconnectedCallback(): void
 
 	adoptedCallback(oldDocument: Document, newDocument: Document): void
 

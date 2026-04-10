@@ -8,7 +8,7 @@ export type AnyStore = ResourceStore<any>
 declare class ResourceStore<T extends { [key: string]: any }> {
 	constructor(name: string)
 
-	get(id: string, subscriber?: StoreSubscriber): T
+	get(id: string): T
 
 	subscribe(id: string, listener: StoreSubscriber): void
 
@@ -37,7 +37,9 @@ export function getStore<T extends { [key: string]: any }>(template: T): { [key 
 
 export function unsubscribe(store: ReturnType<typeof getStore>, listener: StoreSubscriber): void
 
-export function autoSubscribe<T>(subscriber: AutoSubscriber, callback: () => T): T
+export function autoSubscribe(subscriber: AutoSubscriber, callback: () => void): void
+
+export function clearSubscriber(subscriber: AutoSubscriber): void
 
 export function seedStore(store: { [key: string]: ResourceStore<any> }, data: any): void
 

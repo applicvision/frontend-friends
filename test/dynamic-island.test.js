@@ -45,22 +45,36 @@ describe('Dynamic island', () => {
 	})
 
 	it('island with state', async () => {
-		const island = new DynamicIsland({
+		const anIsland = island({
 			name: 'Tuva',
 			age: 0
-		},
-			(state) => html`<h2>name: ${state.name} age: ${state.age}</h2>`
-		)
+		}, (state) => html`<h2>name: ${state.name} age: ${state.age}</h2>`)
 
-		island.mount(testContainer)
+		anIsland.mount(testContainer)
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 0')
 
-		island.state.age++
+		anIsland.state.age++
 
-		await island.pendingUpdate
+		await anIsland.pendingUpdate
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 1')
+	})
+
+	it('island with primitive state', async () => {
+		const anIsland = island(0, state => html`<p>count: ${state}`)
+
+		anIsland.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('count: 0')
+
+		anIsland.state++
+
+		anIsland.state++
+
+		await anIsland.pendingUpdate
+
+		expect(testContainer.textContent).to.equal('count: 2')
 	})
 
 	it('chained state', async () => {

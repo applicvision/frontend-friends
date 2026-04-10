@@ -32,13 +32,9 @@ describe('Shared store component', () => {
 	})
 
 	class ConnectedElement extends DeclarativeElement {
-		user = store.user.get('1', this)
 		render() {
-			return html`<div>age: ${this.user.age} name: ${this.user.name}</div>`
-		}
-
-		disconnectedCallback() {
-			unsubscribe(store, this)
+			const user = store.user.get('1')
+			return html`<div>age: ${user.age} name: ${user.name}</div>`
 		}
 	}
 
