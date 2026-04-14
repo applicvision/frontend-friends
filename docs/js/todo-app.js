@@ -1,7 +1,8 @@
-import { html, island, twoway } from '@applicvision/frontend-friends'
+import { html, island, ref, twoway } from '@applicvision/frontend-friends'
 import { effect } from '@applicvision/frontend-friends/deep-watch'
 import './todo-box.js'
 import { shape } from '@applicvision/frontend-friends/parse-shape'
+import { tokens } from '@applicvision/frontend-friends/attribute-helpers'
 
 
 let todoId = -1
@@ -34,33 +35,45 @@ class Todo {
 }
 
 
-const app = island(() => {
-	return {
-		state: {
-			/** @type {''|'done'|'todo'} */
-			currentFilter: '',
-			/** @type {Todo[]} */
-			todos: effect(Todo.parseFromStorage(), Todo.saveToStorage)
-		}
-	}
-}, ({ state }) => {
+const inputRef = ref(HTMLInputElement)
+
+const app = island({
+	/** @type {''|'done'|'todo'} */
+	currentFilter: '',
+	currentInput: '',
+	/** @type {Todo[]} */
+	todos: effect(Todo.parseFromStorage(), Todo.saveToStorage),
+	/** @type {Todo|null} */
+	editingTodo: null
+}, (state) => {
 	const filteredTodos = state.currentFilter ?
 		state.todos.filter(todo => state.currentFilter == 'done' ? todo.done : !todo.done) :
 		state.todos
+
 	return html`
 		<form onsubmit=${addNewTodo}>
-			<input autofocus required name=title placeholder="Enter new todo">
-			<button>Add</button>
+			<input autofocus ff-ref=${inputRef} required name=title placeholder="Enter new todo" ff-share=${twoway(state, 'currentInput')}>
+			${state.editingTodo ?
+			html`
+				<button type="button" onclick=${stopEditing}>Cancel</button>
+				<button>Update</button>
+			`
+			: html`<button>Add</button>`
+		}
 		</form>
 		<ul class=todo-list>
-			${filteredTodos.map(todo => html`<li class="todo-item">
-				<todo-box ff-share=${twoway(todo, 'done')}></todo-box>
-				<div class=title>${todo.title}</div>
-				<section class="actions">
-					<button type="button" class="edit" onclick=${() => editTodo(todo)}>✎</button>
-					<button type="button" class="destructive" onclick=${() => removeTodo(todo)}>✕</button>
-				</section>
-			</li>`.key(todo.id))}
+			${filteredTodos.map(todo => {
+			const isEditing = state.editingTodo?.id == todo.id
+			return html.key(todo.id)`
+					<li class=${tokens('todo-item', { isEditing })}>
+						<todo-box ff-share=${twoway(todo, 'done')}></todo-box>
+						<div class=title>${todo.title}</div>
+						<section class="actions">
+							<button type="button" class="edit" onclick=${() => editTodo(todo)}>✎</button>
+							<button type="button" class="destructive" onclick=${() => removeTodo(todo)}>✕</button>
+						</section>
+					</li>`
+		})}
 		</ul>
 		<fieldset id="filter">
 			<legend>Filter</legend>
@@ -76,22 +89,33 @@ const app = island(() => {
 
 
 /**
- * @this {HTMLFormElement & {title: HTMLInputElement}}
  * @param {SubmitEvent} event 
  **/
 function addNewTodo(event) {
 	event.preventDefault()
-	const titleField = this.title
-	app.state.todos.push(new Todo(titleField.value))
-	this.reset()
+	const { state } = app
+	if (state.editingTodo) {
+		state.editingTodo.title = state.currentInput
+		state.editingTodo = null
+	} else {
+		app.state.todos.push(new Todo(state.currentInput))
+	}
+	state.currentInput = ''
 }
 
 /** @param {Todo} todoItem */
 function editTodo(todoItem) {
-	const newValue = prompt('New title', todoItem.title)
-	if (newValue) {
-		todoItem.title = newValue
+	if (app.state.editingTodo?.id == todoItem.id) {
+		return stopEditing()
 	}
+	app.state.editingTodo = todoItem
+	app.state.currentInput = todoItem.title
+	inputRef.element?.focus()
+}
+
+function stopEditing() {
+	app.state.currentInput = ''
+	app.state.editingTodo = null
 }
 
 /** @param {Todo} todoItem */
