@@ -1,11 +1,12 @@
 import { twoway, html } from '@applicvision/frontend-friends'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { makeStoreHook, runWithHooks } from './render-hooks.js'
+import { storePlugin, runWithPlugins } from './render-hooks.js'
 
 /**
  * @import {StoreSubscriber} from '../types/src/store.js'
- * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, RenderHook} from '../types/type-utils.js'
+ * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, FFPlugin} from '../types/type-utils.js'
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
+ * @import {definePlugin} from './render-hooks.js'
  * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
 
@@ -31,7 +32,6 @@ function setToBindingOrThrow(binding, newValue) {
 /**
  * @template [SharedState=null]
  * @abstract
- * @implements {StoreSubscriber}
  **/
 export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
@@ -47,9 +47,13 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		if (sharedStateName) {
 			this.#internals = this.attachInternals()
 		}
-		this.registerHook(makeStoreHook())
 	}
 
+	/** @type {{[key: string]: ReturnType<definePlugin>}} */
+	static plugins = {
+		// temporary included
+		store: storePlugin
+	}
 
 	get #componentClass() {
 		return /** @type {typeof DeclarativeElement} */(this.constructor)
@@ -149,6 +153,12 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	connectedCallback() {
+		const { plugins } = this.#componentClass
+		for (const key in plugins) {
+			const pluginCreator = plugins[key]
+			const plugin = pluginCreator(this, this)
+			this.#plugins[key] = plugin
+		}
 		this.#isRendering = true
 		this.#internalRender()
 		this.#isRendering = false
@@ -230,13 +240,10 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		return this.#isRendering
 	}
 
-	/** @type {RenderHook[]} */
-	#renderHooks = []
+	/** @type {{[key: string]: FFPlugin}} */
+	#plugins = {}
 
-	/** @param {RenderHook} hook */
-	registerHook(hook) {
-		this.#renderHooks.push(hook)
-	}
+
 
 	#isRendering = false
 	#internalRender() {
@@ -244,7 +251,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 		if (!shadowRoot) return
 
-		runWithHooks(this, this.#renderHooks, () => {
+		runWithPlugins(this.#plugins, () => {
 
 
 			const dynamicFragment = this.render()
@@ -278,7 +285,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	disconnectedCallback() {
-		this.#renderHooks.forEach(hook => hook.cleanup?.())
+		Object.values(this.#plugins).forEach(plugin => plugin.cleanup?.())
 	}
 }
 

@@ -1,17 +1,32 @@
 import { ResourceStore } from "./store.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
+import { ElementReference } from "./special-attributes.js";
+import { FFPlugin, PluginsState, PluginFactory } from "../type-utils.js";
 
-export class DynamicIsland<T extends object | string | number | boolean | null = null> extends EventTarget {
-	constructor(initialState: T, renderFunction: (state: T) => DynamicFragment)
+type StateShape = object | string | number | boolean | null
+type RefsShape = { [key: string]: ElementReference } | null
+type PluginsShape = { [key: string]: PluginFactory<unknown> } | null
+
+type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
+	(State extends null ? {} : { state: State }) &
+	(Refs extends null ? {} : { refs: Refs }) &
+	(Plugins extends null ? {} : { plugins: PluginsState<Plugins> })
+
+export class DynamicIsland<State extends StateShape = null, Refs extends RefsShape = null, Plugins extends PluginsShape = null> extends EventTarget {
+	constructor(
+		properties: { state?: State, refs?: Refs, plugins?: Plugins },
+		renderFunction: (context: RenderContext<State, Refs, Plugins>) => DynamicFragment)
 
 	readonly pendingUpdate: Promise<any> | null
 	invalidate(): Promise<any>
 
 	storeChanged: (store: ResourceStore<any>) => void
 
-	set state(state: T)
+	set state(state: State)
 
-	get state(): T
+	get state(): State
+
+	get refs(): Refs
 
 	mount(container: HTMLElement): void
 
@@ -28,11 +43,24 @@ export class DynamicIsland<T extends object | string | number | boolean | null =
 export function island(
 	render: () => DynamicFragment
 ): DynamicIsland
+export function island<
+	State extends StateShape = null,
+	Refs extends RefsShape = null,
+	Plugins extends PluginsShape = null
+>(
+	properties: { state?: State, refs?: Refs, plugins?: Plugins },
+	render: (context: RenderContext<State, Refs, Plugins>) => DynamicFragment
+
+): DynamicIsland<State, Refs, Plugins>
 export function island<T extends object | string | number | boolean>(
 	initialState: T,
 	render: (state: T) => DynamicFragment
 ): DynamicIsland<T>
-export function island<T extends { state?: object }>(
-	stateOrRender: () => DynamicFragment | (() => T),
-	renderFunction?: (state: T) => DynamicFragment
-): DynamicIsland<T>
+export function island<
+	State extends object | string | number | boolean,
+	Refs extends { [key: string]: ElementReference },
+	Plugins extends { [key: string]: PluginFactory<unknown> }
+>(
+	propertiesOrRender: () => DynamicFragment | { state?: State, refs?: Refs, plugins?: Plugins } | State,
+	renderFunction?: (state: State) => DynamicFragment
+): DynamicIsland<State, Refs, Plugins>

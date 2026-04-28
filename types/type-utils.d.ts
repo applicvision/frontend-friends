@@ -74,8 +74,25 @@ export interface Invalidatable {
 	invalidate: () => {}
 }
 
-export interface RenderHook {
-	name: string
-	hook: (context: Invalidatable, render: () => void) => void
+export type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
+
+export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends null ? never : K]: PluginStateFromCreator<T[K]> }
+
+export type RenderContextForElement<ElementClass> = ElementClass extends { plugins: infer T } ? PluginsState<T> : never
+
+export type PluginCreator<T = null> = (invalidate: () => void, element: Element) => FFPlugin<T>
+
+export type PluginFactory<T> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
+
+export interface FFPlugin<T = unknown> {
+	state?: T
+	middleware?: (render: () => void) => void
+	cleanup?: () => void
+}
+
+export class FFPluginClass<State> {
+	constructor(invalidate: () => {}, element: Element)
+	state?: State
+	middleware?: (render: () => {}) => void
 	cleanup?: () => void
 }
