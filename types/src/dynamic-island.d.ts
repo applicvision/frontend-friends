@@ -1,16 +1,6 @@
 import { ResourceStore } from "./store.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
-import { ElementReference } from "./special-attributes.js";
-import { FFPlugin, PluginsState, PluginFactory } from "../type-utils.js";
-
-type StateShape = object | string | number | boolean | null
-type RefsShape = { [key: string]: ElementReference } | null
-type PluginsShape = { [key: string]: PluginFactory<unknown> } | null
-
-type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
-	(State extends null ? {} : { state: State }) &
-	(Refs extends null ? {} : { refs: Refs }) &
-	(Plugins extends null ? {} : { plugins: PluginsState<Plugins> })
+import { StateShape, RefsShape, PluginsShape, RenderContext } from "../type-utils.js";
 
 export class DynamicIsland<State extends StateShape = null, Refs extends RefsShape = null, Plugins extends PluginsShape = null> extends EventTarget {
 	constructor(
@@ -37,7 +27,6 @@ export class DynamicIsland<State extends StateShape = null, Refs extends RefsSha
 	get hydratable(): string
 
 	unmount(cacheFragment?: boolean): void
-
 }
 
 export function island(
@@ -57,9 +46,9 @@ export function island<T extends object | string | number | boolean>(
 	render: (state: T) => DynamicFragment
 ): DynamicIsland<T>
 export function island<
-	State extends object | string | number | boolean,
-	Refs extends { [key: string]: ElementReference },
-	Plugins extends { [key: string]: PluginFactory<unknown> }
+	State extends StateShape = null,
+	Refs extends RefsShape = null,
+	Plugins extends PluginsShape = null
 >(
 	propertiesOrRender: () => DynamicFragment | { state?: State, refs?: Refs, plugins?: Plugins } | State,
 	renderFunction?: (state: State) => DynamicFragment

@@ -35,24 +35,27 @@ class Todo {
 }
 
 
-const inputRef = ref(HTMLInputElement)
-
 const app = island({
-	/** @type {''|'done'|'todo'} */
-	currentFilter: '',
-	currentInput: '',
-	/** @type {Todo[]} */
-	todos: effect(Todo.parseFromStorage(), Todo.saveToStorage),
-	/** @type {Todo|null} */
-	editingTodo: null
-}, (state) => {
+	refs: {
+		input: ref(HTMLInputElement)
+	},
+	state: {
+		/** @type {''|'done'|'todo'} */
+		currentFilter: '',
+		currentInput: '',
+		/** @type {Todo[]} */
+		todos: effect(Todo.parseFromStorage(), Todo.saveToStorage),
+		/** @type {Todo|null} */
+		editingTodo: null
+	}
+}, ({ refs, state }) => {
 	const filteredTodos = state.currentFilter ?
 		state.todos.filter(todo => state.currentFilter == 'done' ? todo.done : !todo.done) :
 		state.todos
 
 	return html`
 		<form onsubmit=${addNewTodo}>
-			<input autofocus ff-ref=${inputRef} required name=title placeholder="Enter new todo" ff-share=${twoway(state, 'currentInput')}>
+			<input autofocus ff-ref=${refs.input} required name=title placeholder="Enter new todo" ff-share=${twoway(state, 'currentInput')}>
 			${state.editingTodo ?
 			html`
 				<button type="button" onclick=${stopEditing}>Cancel</button>
@@ -110,7 +113,7 @@ function editTodo(todoItem) {
 	}
 	app.state.editingTodo = todoItem
 	app.state.currentInput = todoItem.title
-	inputRef.element?.focus()
+	app.refs.input.element?.focus()
 }
 
 function stopEditing() {

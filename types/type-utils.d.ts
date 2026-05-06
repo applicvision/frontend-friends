@@ -1,4 +1,5 @@
-import type { DynamicFragment, PropertySetter, } from './src/dynamic-fragment.d.ts'
+import type { DynamicFragment, PropertySetter } from './src/dynamic-fragment.d.ts'
+import type { ElementReference } from './src/special-attributes.d.ts'
 
 export type SpecialAttribute<ValueType, ElementType extends Element> = {
 	isElementValid?: (element: Element) => element is ElementType,
@@ -90,9 +91,20 @@ export interface FFPlugin<T = unknown> {
 	cleanup?: () => void
 }
 
-export class FFPluginClass<State> {
-	constructor(invalidate: () => {}, element: Element)
-	state?: State
-	middleware?: (render: () => {}) => void
-	cleanup?: () => void
-}
+type Prettify<T> = {
+	[K in keyof T]: T[K];
+} & {}
+
+type UnionObject<State, Refs, Plugins> =
+	(State extends null ? {} : { state: State }) &
+	(Refs extends null ? {} : { refs: Refs }) &
+	(Plugins extends null ? {} : { plugins: Prettify<PluginsState<Plugins>> })
+
+
+export type StateShape = object | string | number | boolean | null
+export type RefsShape = { [key: string]: ElementReference } | null
+export type PluginsShape = { [key: string]: PluginFactory<unknown> } | null
+
+export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
+	[Plugins, Refs] extends [null, null] ? State :
+	Prettify<UnionObject<State, Refs, Plugins>>

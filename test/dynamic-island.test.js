@@ -1,9 +1,11 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html } from '../src/dynamic-fragment.js'
+import { spy } from '@applicvision/js-toolbox/function-spy'
 import expect from '@applicvision/js-toolbox/expect'
+import { html, ref } from '@applicvision/frontend-friends'
 import { DynamicIsland, island } from '@applicvision/frontend-friends/island'
 import { getStore } from '../src/store.js'
 import { addTestContainer } from './helpers.js'
+import { definePlugin } from '../src/render-hooks.js'
 
 describe('Dynamic island', () => {
 
@@ -133,5 +135,61 @@ describe('Dynamic island', () => {
 		expect(testContainer.textContent).to.equal('loading...')
 
 		expect(firstRendered).to.equal(testContainer.firstElementChild)
+	})
+
+	it('island with refs', () => {
+		const anIsland = island(
+			{ refs: { diven: ref() } },
+			({ refs }) => html`<div ff-ref=${refs.diven}>test</div>`
+		)
+		anIsland.mount(testContainer)
+
+		expect(anIsland.refs.diven.elementOrThrow).to.equal(testContainer.querySelector('div'))
+	})
+
+	it('island with plugin', async () => {
+		const middlewareSpy = spy()
+		const cleanupSpy = spy()
+		let changeState = () => { }
+		const testPlugin = definePlugin((invalidate) => {
+			const state = {
+				count: 0
+			}
+			changeState = () => {
+				state.count++
+				invalidate()
+			}
+			return {
+				middleware: (render) => {
+					middlewareSpy()
+					render()
+				},
+				state,
+				cleanup: () => cleanupSpy()
+			}
+		})
+
+		const pluginIsland = island({
+			plugins: {
+				test: testPlugin,
+			}
+		}, ({ plugins }) => html`<div>${plugins.test.count}</div>`)
+
+		pluginIsland.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('0')
+
+		expect(middlewareSpy.calls).to.equal(1)
+
+		changeState()
+
+		await pluginIsland.pendingUpdate
+
+		expect(middlewareSpy.calls).to.equal(2)
+		expect(testContainer.textContent).to.equal('1')
+
+		pluginIsland.unmount()
+
+		expect(cleanupSpy.calls).to.equal(1)
 	})
 })
