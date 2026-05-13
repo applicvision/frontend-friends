@@ -77,7 +77,7 @@ export interface Invalidatable {
 
 export type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
 
-export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends null ? never : K]: PluginStateFromCreator<T[K]> }
+export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
 
 export type RenderContextForElement<ElementClass> = ElementClass extends { plugins: infer T } ? PluginsState<T> : never
 
@@ -96,15 +96,15 @@ type Prettify<T> = {
 } & {}
 
 type UnionObject<State, Refs, Plugins> =
-	(State extends null ? {} : { state: State }) &
-	(Refs extends null ? {} : { refs: Refs }) &
-	(Plugins extends null ? {} : { plugins: Prettify<PluginsState<Plugins>> })
+	(State extends undefined ? {} : { state: State }) &
+	(Refs extends undefined ? {} : { refs: Refs }) &
+	(Plugins extends undefined ? {} : { plugins: Prettify<PluginsState<Plugins>> })
 
 
-export type StateShape = object | string | number | boolean | null
-export type RefsShape = { [key: string]: ElementReference } | null
-export type PluginsShape = { [key: string]: PluginFactory<unknown> } | null
+export type StateShape = object | string | number | boolean | undefined
+export type RefsShape = { [key: string]: ElementReference } | undefined
+export type PluginsShape = { [key: string]: PluginFactory<unknown> } | undefined
 
 export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
-	[Plugins, Refs] extends [null, null] ? State :
+	[Plugins, Refs] extends [undefined, undefined] ? State :
 	Prettify<UnionObject<State, Refs, Plugins>>

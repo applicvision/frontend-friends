@@ -8,9 +8,9 @@ import { runWithPlugins, storePlugin } from './render-hooks.js'
  */
 
 /**
- * @template {StateShape} [State=null]
- * @template {RefsShape} [Refs=null]
- * @template {PluginsShape} [Plugins=null]
+ * @template {StateShape} [State=undefined]
+ * @template {RefsShape} [Refs=undefined]
+ * @template {PluginsShape} [Plugins=undefined]
  * @implements {RouteSubscriber}
  **/
 export class DynamicIsland extends EventTarget {
@@ -18,16 +18,16 @@ export class DynamicIsland extends EventTarget {
 	/** @type {HTMLElement?} */
 	#container = null
 
-	/** @type {State} */
+	/** @type {State | undefined} */
 	#state
 
-	/** @type {Refs} */
+	/** @type {Refs | undefined} */
 	#refs
 
 	/** @type {{[key: string]: FFPlugin}} */
 	#plugins = {}
 
-	/** @type {Plugins} */
+	/** @type {Plugins | undefined} */
 	#pluginFactories
 
 	/** @type {AnyRoute | null} */
@@ -65,7 +65,7 @@ export class DynamicIsland extends EventTarget {
 	}
 
 
-	/** @param {State} state */
+	/** @param {State | undefined} state */
 	#watchedState(state) {
 		return typeof state == 'object' && state != null ? deepWatch(state, (keypath, newValue, oldValue) => {
 			if (newValue !== oldValue) {
@@ -102,8 +102,10 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.#container = container
 
-		for (const pluginName in this.#pluginFactories) {
-			this.#plugins[pluginName] = this.#pluginFactories[pluginName](this, container)
+		if (this.#pluginFactories) {
+			for (const pluginName in this.#pluginFactories) {
+				this.#plugins[pluginName] = this.#pluginFactories[pluginName](this, container)
+			}
 		}
 		this.#plugins._store = storePlugin(this, container)
 
@@ -124,7 +126,6 @@ export class DynamicIsland extends EventTarget {
 	 **/
 	hydrate(container) {
 		runWithPlugins(this.#plugins, () => {
-			// @ts-ignore
 			const dynamicFragment = this.#render(this.#renderArg)
 			dynamicFragment.hydrate(container)
 			this.#currentFragment = dynamicFragment
@@ -148,10 +149,15 @@ export class DynamicIsland extends EventTarget {
 			}
 		}
 
-		if (!pluginState && !refs) return this.state
+		if (!pluginState && !refs)
+			return /** @type {RenderContext<State, Refs, Plugins>} */ (this.state)
 
-		/** @type {{state: unknown, plugins?: unknown, refs?: unknown}} */
-		const arg = { state: this.state }
+
+		const arg = {}
+
+		if (this.state !== undefined) {
+			arg.state = this.state
+		}
 
 		if (pluginState) {
 			arg.plugins = pluginState
@@ -161,11 +167,10 @@ export class DynamicIsland extends EventTarget {
 			arg.refs = refs
 		}
 
-		return arg
+		return /** @type {RenderContext<State, Refs, Plugins>}*/(arg)
 	}
 
 	get hydratable() {
-		// @ts-ignore
 		return this.#render(this.#renderArg).toString()
 	}
 
@@ -209,7 +214,6 @@ export class DynamicIsland extends EventTarget {
 
 		runWithPlugins(this.#plugins, () => {
 
-			// @ts-ignore
 			const dynamicFragment = this.#render(this.#renderArg)
 
 			if (dynamicFragment.strings == this.#currentFragment?.strings) {
@@ -243,11 +247,10 @@ export function island(propertiesOrRender, renderFunction) {
 		if (typeof propertiesOrRender == 'object' && ('state' in propertiesOrRender || 'refs' in propertiesOrRender || 'plugins' in propertiesOrRender)) {
 			return new DynamicIsland(propertiesOrRender, renderFunction)
 		}
-		return new DynamicIsland({ state: propertiesOrRender, plugins: null, refs: null }, renderFunction)
+		return new DynamicIsland({ state: propertiesOrRender }, renderFunction)
 	}
 	if (typeof propertiesOrRender == 'function') {
 		return new DynamicIsland({}, propertiesOrRender)
 	}
 	throw new Error('Invalid arguments')
 }
-
