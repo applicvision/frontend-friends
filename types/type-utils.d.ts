@@ -75,17 +75,17 @@ export interface Invalidatable {
 	invalidate: () => {}
 }
 
+export type PluginStateShape = object | undefined
+
 export type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
 
 export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
 
-export type RenderContextForElement<ElementClass> = ElementClass extends { plugins: infer T } ? PluginsState<T> : never
+export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element) => FFPlugin<T>
 
-export type PluginCreator<T = null> = (invalidate: () => void, element: Element) => FFPlugin<T>
+export type PluginFactory<T extends PluginStateShape = PluginStateShape> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
 
-export type PluginFactory<T> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
-
-export interface FFPlugin<T = unknown> {
+export interface FFPlugin<T extends PluginStateShape = PluginStateShape> {
 	state?: T
 	middleware?: (render: () => void) => void
 	cleanup?: () => void
@@ -103,7 +103,7 @@ type UnionObject<State, Refs, Plugins> =
 
 export type StateShape = object | string | number | boolean | undefined
 export type RefsShape = { [key: string]: ElementReference } | undefined
-export type PluginsShape = { [key: string]: PluginFactory<unknown> } | undefined
+export type PluginsShape = { [key: string]: PluginFactory<PluginStateShape> } | undefined
 
 export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
 	[Plugins, Refs] extends [undefined, undefined] ? State :

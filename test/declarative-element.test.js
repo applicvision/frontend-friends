@@ -3,6 +3,7 @@ import expect from '@applicvision/js-toolbox/expect'
 import { spy } from '@applicvision/js-toolbox/function-spy'
 import { html, css, DeclarativeElement } from '@applicvision/frontend-friends'
 import { innerCSS } from '@applicvision/frontend-friends/declarative-element'
+import { definePlugin } from '../src/render-hooks.js'
 import { addTestContainer, shadowText } from './helpers.js'
 
 
@@ -206,5 +207,69 @@ describe('Declarative Element component', () => {
 
 		await element.pendingUpdate
 		expect(element.selection).to.deepEqual(['a', 'b'])
+	})
+
+	it('supports custom plugins with usePlugin', async () => {
+		/** @type {string[]} */
+		const middlewareCalls = []
+		const cleanupSpy = spy()
+		/** @type {(val: string) => void} */
+		let triggerUpdate = () => {}
+
+		const customPlugin1 = definePlugin((invalidate) => {
+			const state = {
+				value: 'plugin-1-state'
+			}
+			triggerUpdate = (/** @type {string} */ val) => {
+				state.value = val
+				invalidate()
+			}
+			return {
+				state,
+				middleware(render) {
+					middlewareCalls.push('plugin-1-start')
+					render()
+					middlewareCalls.push('plugin-1-end')
+				},
+				cleanup: () => cleanupSpy()
+			}
+		})
+
+		const customPlugin2 = definePlugin(() => {
+			return {
+				state: { value: 'plugin-2-state' }
+			}
+		})
+
+		class PluginUsingElement extends DeclarativeElement {
+			plugin1State = this.usePlugin(customPlugin1)
+			plugin2State = this.usePlugin(customPlugin2)
+
+			render() {
+				return html`<div>${this.plugin1State.value} and ${this.plugin2State.value}</div>`
+			}
+		}
+
+		customElements.define('test-plugins', PluginUsingElement)
+
+		const element = new PluginUsingElement()
+		testContainer.replaceChildren(element)
+
+		expect(shadowText(element)).to.equal('plugin-1-state and plugin-2-state')
+		expect(middlewareCalls).to.deepEqual(['plugin-1-start', 'plugin-1-end'])
+
+		// Test changing state and calling invalidate internally
+		triggerUpdate('new-plugin-1-state')
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('new-plugin-1-state and plugin-2-state')
+		expect(middlewareCalls).to.deepEqual([
+			'plugin-1-start', 'plugin-1-end',
+			'plugin-1-start', 'plugin-1-end'
+		])
+
+		// Test cleanup
+		testContainer.replaceChildren()
+		expect(cleanupSpy.calls).to.equal(1)
 	})
 })

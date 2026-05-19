@@ -1,7 +1,7 @@
 import { autoSubscribe, clearSubscriber } from '@applicvision/frontend-friends/store'
 
 /**
- * @import {FFPlugin, PluginCreator, PluginFactory} from '../types/type-utils.js'
+ * @import {FFPlugin, PluginCreator, PluginFactory, PluginStateShape} from '../types/type-utils.js'
  */
 
 /**
@@ -20,7 +20,7 @@ function recursiveRunWithPlugins(plugins, render, pluginIndex = 0) {
 				recursiveRunWithPlugins(plugins, render, pluginIndex + 1)
 			})
 		} else {
-			render()
+			recursiveRunWithPlugins(plugins, render, pluginIndex + 1)
 		}
 	} else {
 		render()
@@ -28,20 +28,16 @@ function recursiveRunWithPlugins(plugins, render, pluginIndex = 0) {
 }
 
 /**
- * @param {{[key: string]: FFPlugin}|null} plugins
+ * @param {{[key: string]: FFPlugin}} plugins
  * @param {() => void} render
  */
 export function runWithPlugins(plugins, render) {
-	if (plugins) {
-		recursiveRunWithPlugins(Object.entries(plugins), () => render())
-	} else {
-		render()
-	}
+	recursiveRunWithPlugins(Object.entries(plugins), () => render())
 }
 
 
 /**
- * @template [State=undefined]
+ * @template {PluginStateShape} [State=undefined]
  * @param {PluginCreator<State>} pluginCreator
  * @return {PluginFactory<State>}
  **/

@@ -3,10 +3,8 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 import { storePlugin, runWithPlugins } from './render-hooks.js'
 
 /**
- * @import {StoreSubscriber} from '../types/src/store.js'
- * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, FFPlugin} from '../types/type-utils.js'
+ * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, FFPlugin, PluginFactory, PluginStateShape, PluginCreator} from '../types/type-utils.js'
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
- * @import {definePlugin} from './render-hooks.js'
  * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
 
@@ -14,8 +12,12 @@ import { storePlugin, runWithPlugins } from './render-hooks.js'
  * @type {(value: unknown) => value is TwowayBinding}
  */
 function isTwowayBinding(value) {
-	// @ts-ignore
-	return typeof value?.get == 'function' && typeof value?.set == 'function'
+	if ((typeof value != 'object') || value == null) {
+		return false
+	}
+	const possibleBinding = /** @type {Partial<TwowayBinding>} */ (value)
+
+	return typeof possibleBinding.get == 'function' && typeof possibleBinding?.set == 'function'
 }
 
 /**
@@ -39,7 +41,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		super()
 		const shadowRoot = this.attachShadow({ mode: 'open' })
 
-
 		const { stylesheets, sharedStateName } = this.#componentClass
 
 		shadowRoot.adoptedStyleSheets = stylesheets
@@ -49,16 +50,9 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		}
 	}
 
-	/** @type {{[key: string]: ReturnType<definePlugin>}} */
-	static plugins = {
-		// temporary included
-		store: storePlugin
-	}
-
 	get #componentClass() {
 		return /** @type {typeof DeclarativeElement} */(this.constructor)
 	}
-
 
 	/**
 	 * Setting this to a valid string identifier
@@ -132,16 +126,13 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 */
 	#lastSharedState = null
 
-	/**
-	 * @protected
-	 * @type {SharedState}
-	 */
+	/** @protected */
 	get sharedState() {
 		if (isTwowayBinding(this.#twowayBinding)) {
 			return this.#twowayBinding.get()
 		}
-		// @ts-ignore
-		return this.#twowayBinding
+
+		return /** @type {SharedState} */ (this.#twowayBinding)
 	}
 
 	/**
@@ -153,12 +144,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	connectedCallback() {
-		const { plugins } = this.#componentClass
-		for (const key in plugins) {
-			const pluginCreator = plugins[key]
-			const plugin = pluginCreator(this, this)
-			this.#plugins[key] = plugin
-		}
 		this.#isRendering = true
 		this.#internalRender()
 		this.#isRendering = false
@@ -199,7 +184,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	/**
-	 * @protected
 	 * @template {object} T
 	 * @param {T} object
 	 * @param {(keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void} effect
@@ -207,6 +191,18 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 */
 	reactive(object, effect = (keypath, newValue, oldValue) => { if (newValue !== oldValue) this.invalidate() }) {
 		return deepWatch(object, effect)
+	}
+
+	/**
+	 * @template {PluginStateShape} T
+	 * @param {PluginFactory<T>} pluginCreator
+	 * @returns {T}
+	 */
+	usePlugin(pluginCreator) {
+		const plugin = pluginCreator(this, this)
+		const pluginId = Object.keys(this.#plugins).length
+		this.#plugins[pluginId] = plugin
+		return /** @type {T} */(plugin.state)
 	}
 
 	/** @type {Promise<any>|null} */
@@ -240,10 +236,10 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 		return this.#isRendering
 	}
 
-	/** @type {{[key: string]: FFPlugin}} */
-	#plugins = {}
-
-
+	/** @type {Record<string, FFPlugin>} */
+	#plugins = {
+		store: storePlugin(this, this)
+	}
 
 	#isRendering = false
 	#internalRender() {

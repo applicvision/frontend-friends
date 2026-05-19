@@ -1,7 +1,7 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
 import expect from '@applicvision/js-toolbox/expect'
-import { DeclarativeElement } from '../src/declarative-element.js'
-import { getStore, unsubscribe } from '../src/store.js'
+import { DeclarativeElement } from '@applicvision/frontend-friends'
+import { getStore } from '../src/store.js'
 import { html } from '../src/dynamic-fragment.js'
 import { addTestContainer } from './helpers.js'
 
@@ -18,7 +18,7 @@ describe('Shared store component', () => {
 		user: undefined
 	})
 
-	/** @type {ConnectedElement} */
+	/** @type {ElementUsingStore} */
 	let element
 
 	/** @type {HTMLElement} */
@@ -31,7 +31,7 @@ describe('Shared store component', () => {
 		store.user.insertWithId('1', { age: 1, name: 'nisse' })
 	})
 
-	class ConnectedElement extends DeclarativeElement {
+	class ElementUsingStore extends DeclarativeElement {
 		render() {
 			const user = store.user.get('1')
 			return html`<div>age: ${user.age} name: ${user.name}</div>`
@@ -39,13 +39,11 @@ describe('Shared store component', () => {
 	}
 
 	before(() => {
-		customElements.define('test-connected', ConnectedElement)
+		customElements.define('test-store', ElementUsingStore)
 	})
 
 	it('should render with value in store', async () => {
-		/** @type {ConnectedElement} */
-		// @ts-ignore
-		element = document.createElement('test-connected')
+		element = new ElementUsingStore
 		testContainer.replaceChildren(element)
 		expect(shadowText(element)).to.equal('age: 1 name: nisse')
 	})
