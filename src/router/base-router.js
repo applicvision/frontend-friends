@@ -1,7 +1,6 @@
-/** @typedef {{routeChanged: () => void, routeSubscription: AnyRoute?}} RouteSubscriber */
+/** @typedef {{routeChanged: () => void, subscriptions: Set<AnyRoute>}} RouteSubscriber */
 
 import { parse } from '@applicvision/frontend-friends/parse-shape'
-
 
 /** @import {AnyStore} from '@applicvision/frontend-friends/store' */
 
@@ -28,7 +27,6 @@ export async function getJSON(responseShape, input, init) {
 /**
  * @typedef {Route<any, any, any>} AnyRoute
  */
-
 
 /**
  * @template {string} PathTemplate
@@ -121,7 +119,7 @@ export class Route {
 	 * @param {RouteSubscriber} subscriber
 	 */
 	subscribe(subscriber) {
-		subscriber.routeSubscription = this
+		subscriber.subscriptions.add(this)
 		this.#subscribers.add(subscriber)
 	}
 
@@ -146,8 +144,9 @@ export class Route {
 	}
 
 	get data() {
-		if (autoSubscriber) {
-			this.subscribe(autoSubscriber)
+		const subscriber = autoSubscribers.at(-1)
+		if (subscriber) {
+			this.subscribe(subscriber)
 		}
 		return this.#data
 	}
@@ -162,8 +161,9 @@ export class Route {
 	}
 
 	get params() {
-		if (autoSubscriber) {
-			this.subscribe(autoSubscriber)
+		const subscriber = autoSubscribers.at(-1)
+		if (subscriber) {
+			this.subscribe(subscriber)
 		}
 		return this.#params
 	}
@@ -209,7 +209,7 @@ export class Route {
 
 		/** @type {ParamValue<ParamTemplate>} */
 		// @ts-ignore
-		const params = Object.fromEntries(Object.keys(this.params ?? {}).map(paramName => [paramName, undefined]))
+		const params = Object.fromEntries(Object.keys(this.#params ?? {}).map(paramName => [paramName, undefined]))
 		for (let index = 0; index < pathParts.length; index += 1) {
 			const part = this.pathParts[index]
 			if (part.type == 'constant' && part.value != pathParts[index]) {
@@ -244,7 +244,6 @@ export class BaseRouter {
 
 	/** @type {AnyRoute | null} */
 	#activeRoute = null
-
 
 	/** @type {{[key: string]: any}} */
 	#activeParams = {}
@@ -320,7 +319,7 @@ export class BaseRouter {
 	 * @param {any=} args
 	 */
 	loadRoute(args) {
-		return this.route?.load(this.getJSON, this.params, this.query)
+		return this.route?.load(this.getJSON, this.#activeParams, this.query)
 	}
 
 	/**
@@ -363,8 +362,8 @@ export class BaseRouter {
 	}
 }
 
-/** @type {RouteSubscriber | null} */
-let autoSubscriber = null
+/** @type {RouteSubscriber[]} */
+const autoSubscribers = []
 
 
 /**
@@ -373,10 +372,12 @@ let autoSubscriber = null
  * @param {() => T} callback
  */
 export function autoSubscribe(subscriber, callback) {
-	autoSubscriber = subscriber
-	const returnValue = callback()
-	autoSubscriber = null
-	return returnValue
+	autoSubscribers.push(subscriber)
+	try {
+		return callback()
+	} finally {
+		autoSubscribers.pop()
+	}
 }
 
 /**

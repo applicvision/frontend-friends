@@ -1,5 +1,5 @@
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { runWithPlugins, storePlugin } from './render-hooks.js'
+import { routerPlugin, runWithPlugins, storePlugin } from './render-hooks.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
@@ -11,7 +11,6 @@ import { runWithPlugins, storePlugin } from './render-hooks.js'
  * @template {StateShape} [State=undefined]
  * @template {RefsShape} [Refs=undefined]
  * @template {PluginsShape} [Plugins=undefined]
- * @implements {RouteSubscriber}
  **/
 export class DynamicIsland extends EventTarget {
 
@@ -29,9 +28,6 @@ export class DynamicIsland extends EventTarget {
 
 	/** @type {Plugins | undefined} */
 	#pluginFactories
-
-	/** @type {AnyRoute | null} */
-	routeSubscription = null
 
 	#render
 
@@ -56,14 +52,6 @@ export class DynamicIsland extends EventTarget {
 			// TODO: maybe signal update
 		})
 	}
-
-	routeChanged() {
-		// const { state, ...otherProps } = this.#setup()
-		// this.#renderProps = otherProps
-		// this.state = state
-		// this.#internalRender()
-	}
-
 
 	/** @param {State | undefined} state */
 	#watchedState(state) {
@@ -102,15 +90,21 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.#container = container
 
+		this.#registerPlugins()
+		this.#internalRender()
+		this.dispatchEvent(new Event('mount'))
+	}
+
+	#registerPlugins() {
+		const container = this.#container
+		if (!container) return
 		if (this.#pluginFactories) {
 			for (const pluginName in this.#pluginFactories) {
 				this.#plugins[pluginName] = this.#pluginFactories[pluginName](this, container)
 			}
 		}
 		this.#plugins._store = storePlugin(this, container)
-
-		this.#internalRender()
-		this.dispatchEvent(new Event('mount'))
+		this.#plugins._router = routerPlugin(this, container)
 	}
 
 	get container() {
@@ -125,12 +119,9 @@ export class DynamicIsland extends EventTarget {
 	 * @param {HTMLElement} container
 	 **/
 	hydrate(container) {
-		runWithPlugins(this.#plugins, () => {
-			const dynamicFragment = this.#render(this.#renderArg)
-			dynamicFragment.hydrate(container)
-			this.#currentFragment = dynamicFragment
-			this.#container = container
-		})
+		this.#container = container
+		this.#registerPlugins()
+		this.#internalRender()
 	}
 
 	get #renderArg() {
@@ -182,9 +173,6 @@ export class DynamicIsland extends EventTarget {
 			this.#fragmentCache.clear()
 		}
 
-		// remove subscriptions
-		this.routeSubscription?.unsubscribe(this)
-		this.routeSubscription = null
 		Object.values(this.#plugins ?? {}).forEach(plugin => plugin.cleanup?.())
 		this.#plugins = {}
 

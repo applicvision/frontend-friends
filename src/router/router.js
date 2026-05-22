@@ -1,11 +1,12 @@
+import { Server, IncomingMessage } from 'node:http'
+import { Writable } from 'node:stream'
+import { finished } from 'node:stream/promises'
+import path from 'node:path'
+import { readFile } from 'node:fs/promises'
+
 import { BaseRouter } from './base-router.js'
-import path from 'path'
 import { clearStore, serialize } from '../store.js'
-import { readFile } from 'fs/promises'
 import { DynamicIsland } from '../dynamic-island.js'
-import { Server, IncomingMessage } from 'http'
-import { Writable } from 'stream'
-import { finished } from 'stream/promises'
 import { parse } from '@applicvision/frontend-friends/parse-shape'
 
 class FakeResponse extends Writable {
@@ -159,7 +160,7 @@ export class Router extends BaseRouter {
 		const islandsHtml = await Promise.all(islandsToLoad.map(async islandPath => {
 			const [filePath, exportName = 'default'] = islandPath.href.split('?')
 
-			const { [exportName]: island } = await import(path.join(this.viewDirectory, filePath))
+			const { [exportName]: island } = await import(path.resolve(this.viewDirectory, filePath))
 			// TODO: resolve files using some config for public directory
 			/** @type {{default: DynamicIsland<any>}} */
 			return island.hydratable

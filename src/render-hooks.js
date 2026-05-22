@@ -1,7 +1,9 @@
 import { autoSubscribe, clearSubscriber } from '@applicvision/frontend-friends/store'
+import { Route, autoSubscribe as routerAutoSubscribe } from '@applicvision/frontend-friends/base-router'
 
 /**
  * @import {FFPlugin, PluginCreator, PluginFactory, PluginStateShape} from '../types/type-utils.js'
+ * @import {AnyRoute} from '@applicvision/frontend-friends/base-router'
  */
 
 /**
@@ -32,7 +34,7 @@ function recursiveRunWithPlugins(plugins, render, pluginIndex = 0) {
  * @param {() => void} render
  */
 export function runWithPlugins(plugins, render) {
-	recursiveRunWithPlugins(Object.entries(plugins), () => render())
+	recursiveRunWithPlugins(Object.entries(plugins), render)
 }
 
 
@@ -87,6 +89,26 @@ export const storePlugin = definePlugin((invalidate) => {
 		},
 		cleanup() {
 			clearSubscriber(subscriber)
+		}
+	}
+})
+
+export const routerPlugin = definePlugin((invalidate, element) => {
+	const subscriber = {
+		/** @type {Set<AnyRoute>} */
+		subscriptions: new Set(),
+		routeChanged: invalidate
+	}
+
+	return {
+		middleware(render) {
+			subscriber.subscriptions.forEach(sub => sub.unsubscribe(subscriber))
+			subscriber.subscriptions.clear()
+			routerAutoSubscribe(subscriber, render)
+		},
+		cleanup() {
+			subscriber.subscriptions.forEach(sub => sub.unsubscribe(subscriber))
+			subscriber.subscriptions.clear()
 		}
 	}
 })

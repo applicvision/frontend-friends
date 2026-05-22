@@ -1,6 +1,6 @@
 import { twoway, html } from '@applicvision/frontend-friends'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { storePlugin, runWithPlugins } from './render-hooks.js'
+import { storePlugin, routerPlugin, runWithPlugins } from './render-hooks.js'
 
 /**
  * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, FFPlugin, PluginFactory, PluginStateShape, PluginCreator} from '../types/type-utils.js'
@@ -238,7 +238,8 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	/** @type {Record<string, FFPlugin>} */
 	#plugins = {
-		store: storePlugin(this, this)
+		store: storePlugin(this, this),
+		router: routerPlugin(this, this)
 	}
 
 	#isRendering = false
