@@ -360,6 +360,8 @@ export class BaseRouter {
 	get parentChain() {
 		return this.#activeParentChain
 	}
+
+	static Route = Route
 }
 
 /** @type {RouteSubscriber[]} */

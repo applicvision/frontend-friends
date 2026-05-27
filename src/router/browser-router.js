@@ -1,9 +1,9 @@
 import { seedStore } from '@applicvision/frontend-friends/store'
-import { BaseRouter } from '@applicvision/frontend-friends/base-router'
+import { BaseRouter } from './base-router.js'
 import { register as registerIslandComponent } from '@applicvision/frontend-friends/router/dynamic-island'
 import { register as registerRouterLink } from '@applicvision/frontend-friends/router/router-link'
 
-/** @import {AnyRoute} from '@applicvision/frontend-friends/base-router' */
+/** @import {AnyRoute} from './base-router.js' */
 
 /** @extends BaseRouter<any> */
 export class Router extends BaseRouter {

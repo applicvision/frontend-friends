@@ -1,6 +1,4 @@
-import { Server, IncomingMessage } from 'node:http'
-import { Writable } from 'node:stream'
-import { finished } from 'node:stream/promises'
+import { Server, IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 
@@ -9,28 +7,52 @@ import { clearStore, serialize } from '../store.js'
 import { DynamicIsland } from '../dynamic-island.js'
 import { parse } from '@applicvision/frontend-friends/parse-shape'
 
-class FakeResponse extends Writable {
+class FakeResponse extends ServerResponse {
 	#text = ''
 
+	/** @type {Function?} */
+	#resolveCompleted = null
+	completed = new Promise((resolve) => {
+		this.#resolveCompleted = resolve
+	})
+
 	/**
-	 * @param {string} chunk
-	 * @param {BufferEncoding} encoding
-	 * @param {(error?: Error) => void} callback
+	 * @param {any} chunk
+	 * @param {BufferEncoding | ((error?: Error | null) => void)} [encoding]
+	 * @param {(error?: Error | null) => void} [callback]
+	 * @returns {boolean}
 	 */
-	_write(chunk, encoding, callback) {
-		this.#text += chunk
-		callback()
+	write(chunk, encoding, callback) {
+
+		this.#text += chunk.toString()
+		if (typeof callback == 'function') callback()
+		else if (typeof encoding == 'function') encoding()
+
+		return true
+	}
+
+	/**
+	 * @param {any | (() => void)} [chunk]
+	 * @param {BufferEncoding | (() => void)} [encoding]
+	 * @param {() => void} [callback]
+	 * @returns {this}
+	 */
+	end(chunk, encoding, callback) {
+
+		if (chunk && (typeof chunk === 'string' || Buffer.isBuffer(chunk))) {
+			this.#text += chunk.toString()
+		}
+
+		if (typeof callback === 'function') callback()
+		else if (typeof encoding === 'function') encoding()
+
+		this.#resolveCompleted?.()
+
+		return this
 	}
 
 	get json() {
 		return JSON.parse(this.#text)
-	}
-
-	writeHead() {
-		if (this.headersSent) {
-			throw new Error('FakeResponse, headers already sent')
-		}
-		this.headersSent = true
 	}
 }
 
@@ -79,10 +101,15 @@ export class Router extends BaseRouter {
 	 * @param {string} url
 	 * @param {IncomingMessage} request
 	 */
-	async #fakeGetRequest(responseShape, url, request) {
-		const response = new FakeResponse()
-		this.#server?.emit('request', { url, method: 'GET' }, response)
-		await finished(response)
+	async #injectRequest(responseShape, url, request) {
+		const originalUrl = request.url
+		request.url = url
+
+		const response = new FakeResponse(request)
+
+		this.#server?.emit('request', request, response)
+		await response.completed
+		request.url = originalUrl
 		return parse(responseShape, response.json)
 	}
 
@@ -92,8 +119,8 @@ export class Router extends BaseRouter {
 	async loadRoute(request) {
 		await this.route?.load(
 			(responseShape, input, init) =>
-				typeof input == 'string' ?
-					this.#fakeGetRequest(responseShape, input, request) :
+				typeof input == 'string' && !input.startsWith('http') ?
+					this.#injectRequest(responseShape, input, request) :
 					this.getJSON(responseShape, input, init)
 			,
 			this.params,
@@ -104,40 +131,32 @@ export class Router extends BaseRouter {
 	/** @type {Server?} */
 	#server = null
 	/**
-	 * @param {Server} server
 	 * @param {string} path
+	 * @return {(request: IncomingMessage, response: ServerResponse, server: Server) => Promise<void>}
 	 */
-	mount(server, path = '/') {
-		this.#server = server
-		server.on('request', async (request, response) => {
+	mount(path = '/') {
+		return async (request, response, server) => {
+			this.#server ??= server
 			if (request.url?.startsWith(path)) {
-				if (response.writableEnded || response.headersSent) {
-					// console.log('Response has been sent', request.url)
-					return
-				}
 
 				if (this.resolve(request.url)) {
 					clearStore(this.store)
-					response.writeHead(200, { 'content-type': 'text/html' })
-					await this.loadRoute(request)
 					try {
+						await this.loadRoute(request)
 						const responseHtml = await this.render()
+						response.writeHead(200, { 'content-type': 'text/html' })
 						response.end(responseHtml)
-					} catch (error) {
-						// TODO: need to remove writeHead for this to work
-						response.statusCode = 500
-						if (error instanceof Error) {
-							response.end(`<h2>Error rendering ${this.path}</h2><h3><pre>${error.message}</pre></h2><pre>${error.stack}</pre>`)
-						} else {
-							response.end(`<h2>Unknown rendering error</h2><pre>${error}</pre>`)
-						}
+					} catch (err) {
+						const error = /** @type {Error} */(err)
+						response.writeHead(500)
+						response.end(`<h2>Error rendering ${this.path}</h2><h3><pre>${error.message}</pre></h2><pre>${error.stack}</pre>`)
 					}
 				} else {
 					response.writeHead(404)
 					response.end('Route not found')
 				}
 			}
-		})
+		}
 	}
 
 	async render() {

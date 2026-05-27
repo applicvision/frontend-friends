@@ -4,16 +4,16 @@ import { spy } from '@applicvision/js-toolbox/function-spy'
 import { html, css, DeclarativeElement } from '@applicvision/frontend-friends'
 import { innerCSS } from '@applicvision/frontend-friends/declarative-element'
 import { definePlugin } from '../src/render-hooks.js'
+import { BaseRouter, route } from '../src/router/base-router.js'
 import { addTestContainer, shadowText } from './helpers.js'
 
 
-/**
- * @param {HTMLElement} element
- * @return {HTMLElement}
- */
+/** @param {HTMLElement} element */
 function firstShadowElement(element) {
-	// @ts-ignore
-	return element.shadowRoot?.firstElementChild
+	const firstShadowElement = element.shadowRoot?.firstElementChild
+	if (!(firstShadowElement instanceof HTMLElement))
+		throw new Error('Missing shadow element')
+	return firstShadowElement
 }
 
 describe('Declarative Element component', () => {

@@ -46,9 +46,10 @@
       "types": "./types/src/attribute-helpers.d.ts",
       "default": "./src/attribute-helpers.js"
     },
-    "./router": "./src/router/router.js",
-    "./base-router": "./src/router/base-router.js",
-    "./browser-router": "./src/router/browser-router.js",
+    "./router": {
+      "node": "./src/router/router.js",
+      "default": "./src/router/browser-router.js"
+    },
     "./router/dynamic-island": "./src/router/dynamic-island.js",
     "./router/router-link": "./src/router/router-link.js"
   },
