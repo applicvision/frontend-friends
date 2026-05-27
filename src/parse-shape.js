@@ -1,6 +1,4 @@
 
-/** @import {DataShape} from '../types/src/parse-shape.js' */
-
 /**
  * @template T
  */
@@ -51,10 +49,10 @@ export function optional(value) {
 
 
 /**
- * @template {DataShape<any>} T
+ * @template T
  * @param {T} shape
  * @param {any} data
- * @returns {DataShape<T>}
+ * @returns {any}
  */
 export function parse(shape, data) {
 	if (shape instanceof Optional) {
@@ -63,75 +61,94 @@ export function parse(shape, data) {
 		}
 		shape = shape.type
 	}
-	if (shape == String || shape == Boolean || shape == Number) {
-		if (data == null) {
-			throw new ParseError(`Expected a ${shape.name.toLowerCase()}, but none was found`)
+	if (shape == String) {
+		const type = typeof data
+		if (type != 'string') {
+			throw new ParseShapeError('Expected a string. But found ' + type)
 		}
-		return shape(data)
+		return data
+	}
+	if (shape == Boolean) {
+		const type = typeof data
+		if (type != 'boolean') {
+			throw new ParseShapeError('Expected a boolean. But found ' + type)
+		}
+		return data
+	}
+	if (shape == Number) {
+		const type = typeof data
+		if (type != 'number') {
+			throw new ParseShapeError('Expected a number. But found ' + type)
+		}
+		return data
 	}
 	if (shape == Date) {
 		const date = new Date(data)
 
 		if (isNaN(Number(date))) {
-			throw new ParseError('Expected to be a valid date string, but got: ' + data)
+			throw new ParseShapeError('Expected to be a valid date string, but got: ' + data)
 		}
 		return date
 	}
 	if (shape == URL) {
-		return new URL(data)
+		try {
+			return new URL(data)
+		} catch (error) {
+			throw new ParseShapeError('Expected a valid URL, but got: ' + data)
+		}
 	}
 	if (Array.isArray(shape)) {
 		if (!Array.isArray(data)) {
-			throw new ParseError('Expected array got: ' + data)
+			throw new ParseShapeError('Expected array got: ' + data)
 		}
 		return data.map((entry, index) => {
 			try {
 				return parse(shape[0], entry)
 			} catch (error) {
-
-				const parseError = /** @type {ParseError} */(error)
-				const rethrown = new ParseError(parseError.message)
-				rethrown.keyPath = [`[${index}]`, ...parseError.keyPath]
-				throw rethrown
+				if (error instanceof ParseShapeError) {
+					error.keyPath.unshift(`[${index}]`)
+				}
+				throw error
 			}
 		})
 	}
 	// consider this as constructor function
 	if (typeof shape == 'function') {
-		const instance = new shape()
-		return Object.assign(instance, data)
+		/** @type {new (...args: any) => any} */
+		const ShapeClass = /** @type {any}*/(shape)
+		try {
+			const instance = new ShapeClass(data)
+			return Object.assign(instance, data)
+		} catch (error) {
+			throw new ParseShapeError('Failed to instantiate constructor: ' + (error instanceof Error ? error.message : String(error)))
+		}
 	}
 	if (typeof shape != 'object' || shape == null) {
-		throw new ParseError('Unexpected shape ' + shape)
+		throw new ParseShapeError('Unexpected shape ' + shape)
 	}
-	if (typeof data != 'object' || shape == null) {
-		throw new ParseError('Unexpected data. Expected object, got: ' + data)
+	if (typeof data != 'object' || data == null) {
+		throw new ParseShapeError('Unexpected data. Expected object, got: ' + data)
 	}
 
-	return Object.fromEntries(Object.entries(shape instanceof Optional ? shape.type : shape).map(
+	return Object.fromEntries(Object.entries(shape).map(
 		([key, propertyShape]) => {
 			try {
 				return [key, parse(propertyShape, data[key])]
 			} catch (error) {
-				/** @type {ParseError} */
-				const parseError = error
-				const rethrown = new ParseError(parseError.message)
-				rethrown.keyPath = [key, ...parseError.keyPath]
-				throw rethrown
+				if (error instanceof ParseShapeError) {
+					error.keyPath.unshift(key)
+				}
+				throw error
 			}
 		}
 	))
 }
 
 
-class ParseError extends Error {
+class ParseShapeError extends Error {
 	/**
 	 * @type {string[]}
 	 */
 	keyPath = []
-
-	get cause() {
-		return `${this.message} at ${this.keyPath.join('.').replaceAll('.[', '[')}`
-	}
 }
 
