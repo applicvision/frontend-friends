@@ -1,5 +1,5 @@
 import { autoSubscribe, clearSubscriber } from '@applicvision/frontend-friends/store'
-import { Route, autoSubscribe as routerAutoSubscribe } from './router/base-router.js'
+import { autoSubscribe as routerAutoSubscribe } from './router/base-router.js'
 
 /**
  * @import {FFPlugin, PluginCreator, PluginFactory, PluginStateShape} from '../types/type-utils.js'

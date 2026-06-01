@@ -36,3 +36,7 @@ declare class Shape<T> {
  * Creates a reusable parse instance, specifying the shape to parse.
  */
 export function shape<T>(definition: T): Shape<T>
+
+export class ParseShapeError extends Error {
+	keyPath: string[]
+}

@@ -86,7 +86,7 @@ export function parse(shape, data) {
 		const date = new Date(data)
 
 		if (isNaN(Number(date))) {
-			throw new ParseShapeError('Expected to be a valid date string, but got: ' + data)
+			throw new ParseShapeError('Expected a valid date string. But found: ' + data)
 		}
 		return date
 	}
@@ -94,12 +94,12 @@ export function parse(shape, data) {
 		try {
 			return new URL(data)
 		} catch (error) {
-			throw new ParseShapeError('Expected a valid URL, but got: ' + data)
+			throw new ParseShapeError('Expected a valid URL, but found: ' + data)
 		}
 	}
 	if (Array.isArray(shape)) {
 		if (!Array.isArray(data)) {
-			throw new ParseShapeError('Expected array got: ' + data)
+			throw new ParseShapeError('Expected an array. But found: ' + data)
 		}
 		return data.map((entry, index) => {
 			try {
@@ -127,7 +127,7 @@ export function parse(shape, data) {
 		throw new ParseShapeError('Unexpected shape ' + shape)
 	}
 	if (typeof data != 'object' || data == null) {
-		throw new ParseShapeError('Unexpected data. Expected object, got: ' + data)
+		throw new ParseShapeError('Expected an object. But found: ' + data)
 	}
 
 	return Object.fromEntries(Object.entries(shape).map(
@@ -145,10 +145,9 @@ export function parse(shape, data) {
 }
 
 
-class ParseShapeError extends Error {
-	/**
-	 * @type {string[]}
-	 */
+export class ParseShapeError extends Error {
+
+	/** @type {string[]} */
 	keyPath = []
 }
 

@@ -1,7 +1,7 @@
 
-export type StoreSubscriber = { storeChanged: (store: ResourceStore<any>) => void }
+export type StoreSubscriber = { storeChanged: (store: ResourceStore<any>, resourceId?: string) => void }
 
-export type AutoSubscriber = StoreSubscriber & { subscriptions: Map<ResourceStore<any>, Set<string>> }
+export type AutoSubscriber = StoreSubscriber & { subscriptions: Map<ResourceStore<any>, Set<string | symbol>> }
 
 export type AnyStore = ResourceStore<any>
 
@@ -10,11 +10,11 @@ declare class ResourceStore<T extends { [key: string]: any }> {
 
 	get(id: string): T
 
-	subscribe(id: string, listener: StoreSubscriber): void
+	subscribe(listener: StoreSubscriber, id?: string): void
 
 	unsubscribeAll(listener: StoreSubscriber): void
 
-	unsubscribe(id: string, listener: StoreSubscriber): void
+	unsubscribe(listener: StoreSubscriber, id?: string): void
 
 	update(id: string, updates: Partial<T>): T
 

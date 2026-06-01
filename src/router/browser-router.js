@@ -1,7 +1,6 @@
 import { seedStore } from '@applicvision/frontend-friends/store'
 import { BaseRouter } from './base-router.js'
 import { register as registerIslandComponent } from '@applicvision/frontend-friends/router/dynamic-island'
-import { register as registerRouterLink } from '@applicvision/frontend-friends/router/router-link'
 
 /** @import {AnyRoute} from './base-router.js' */
 
@@ -22,42 +21,6 @@ export class Router extends BaseRouter {
 			this.#viewCache[view] = await response.text()
 		}
 		return this.#viewCache[view]
-	}
-
-	/**
-	 * @param {PopStateEvent} event
-	 */
-	async #handlePopState(event) {
-		const { route: previousRoute } = this
-		this.resolve(location.pathname)
-		if (this.route != previousRoute) {
-			await this.loadView(previousRoute)
-		}
-		// @ts-ignore
-		this.route._setData(event.state)
-	}
-
-	/**
-	 * @param {string} destination
-	 */
-	async transitionTo(destination) {
-		const { route: previousRoute, path: previousPath } = this
-
-		if (!this.resolve(destination)) {
-			// console.log('not found, handle')
-			return
-		}
-
-		if (previousPath != destination) {
-			history.pushState(null, '', destination)
-		}
-
-		if (previousRoute != this.route) {
-			await this.loadView(previousRoute)
-		}
-		const routeData = await this.loadRoute()
-
-		history.replaceState(routeData, '')
 	}
 
 	/**
@@ -98,26 +61,31 @@ export class Router extends BaseRouter {
 			throw new Error('Can not render')
 
 		}
-
-		container.innerHTML = ''
-
-		container.toggleAttribute('dynamic', true)
 		const viewHtml = await Promise.all(routeChainToLoad.map(route => this.#loadViewFile(route.view)))
-		const template = document.createElement('template')
-		/** @type {Element?} */
-		let nextOutlet = container
-		viewHtml.forEach((view, index) => {
-			template.innerHTML = view
-			let routerOutlet = null
-			if (index < viewHtml.length - 1) {
-				routerOutlet = template.content.querySelector('router-outlet')
 
-				routerOutlet?.setAttribute('owner', routeChainToLoad[index].view)
-				routerOutlet?.toggleAttribute('dynamic', true)
-			}
-			nextOutlet?.appendChild(template.content)
-			nextOutlet = routerOutlet
+		const transition = document.startViewTransition(() => {
+
+			container.innerHTML = ''
+
+			container.toggleAttribute('dynamic', true)
+			const template = document.createElement('template')
+			/** @type {Element?} */
+			let nextOutlet = container
+			viewHtml.forEach((view, index) => {
+				template.innerHTML = view
+				let routerOutlet = null
+				if (index < viewHtml.length - 1) {
+					routerOutlet = template.content.querySelector('router-outlet')
+
+					routerOutlet?.setAttribute('owner', routeChainToLoad[index].view)
+					routerOutlet?.toggleAttribute('dynamic', true)
+				}
+				nextOutlet?.appendChild(template.content)
+				nextOutlet = routerOutlet
+			})
 		})
+
+		await transition.finished
 	}
 
 	/**
@@ -129,11 +97,48 @@ export class Router extends BaseRouter {
 		const initialData = JSON.parse(document.getElementById('routedata')?.textContent ?? '')
 		// @ts-ignore
 		this.route._setData(initialData.route)
+		navigation.updateCurrentEntry({ state: initialData.route })
 		registerIslandComponent(this.viewDirectory)
-		registerRouterLink(this)
 		seedStore(this.store, initialData.store)
-		onpopstate = this.#handlePopState.bind(this)
-		history.replaceState(initialData.route, '')
+		navigation.addEventListener('navigate', (event) => {
+
+			if (
+				!event.canIntercept ||
+				event.hashChange ||
+				event.downloadRequest != null
+			) {
+				return
+			}
+
+			const url = new URL(event.destination.url)
+
+			const previousRoute = this.route
+
+			const routeExists = this.resolve(url.pathname)
+
+			if (!routeExists) return
+
+
+			const isTraversal = event.navigationType == 'traverse'
+			const lastState = event.destination.getState()
+
+			event.intercept({
+				handler: async () => {
+					if (isTraversal && lastState) {
+
+						// @ts-ignore
+						this.route._setData(lastState)
+					} else {
+
+						const data = await this.loadRoute()
+						navigation.updateCurrentEntry({ state: data })
+					}
+					if (this.route != previousRoute) {
+						await this.loadView(previousRoute)
+					}
+				}
+			})
+		})
 	}
 }
 
