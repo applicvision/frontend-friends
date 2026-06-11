@@ -1,6 +1,6 @@
 import { DynamicIsland } from '@applicvision/frontend-friends/island'
 
-export class DynamicIslandContainer extends HTMLElement {
+export class RouteIslandContainer extends HTMLElement {
 	static observedAttributes = ['href']
 
 	/** @type {DynamicIsland<any>|null} */
@@ -37,6 +37,10 @@ export class DynamicIslandContainer extends HTMLElement {
 			island.hydrate(this)
 		}
 	}
+
+	static {
+		//customElements.define('route-island', RouteIslandContainer)
+	}
 }
 
 let viewDirectory = ''
@@ -44,7 +48,7 @@ let viewDirectory = ''
 /**
  * @param {string} viewDir
  */
-export function register(viewDir, name = 'dynamic-island') {
+export function register(viewDir) {
 	viewDirectory = viewDir
-	customElements.define(name, DynamicIslandContainer)
+	customElements.define('route-island', RouteIslandContainer)
 }

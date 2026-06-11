@@ -1,6 +1,6 @@
 export type DataShape<T> = T extends StringConstructor | NumberConstructor | BooleanConstructor ?
 	ReturnType<T> :
-	T extends abstract new (...args: any) => any ?
+	T extends new (...args: any) => any ?
 	InstanceType<T> :
 	T extends Optional<infer Type> ?
 	DataShape<Type> | undefined :

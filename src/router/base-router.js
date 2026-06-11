@@ -1,8 +1,24 @@
-/** @typedef {{routeChanged: () => void, subscriptions: Set<AnyRoute>}} RouteSubscriber */
+/** @typedef {{routeChanged: () => void}} RouteSubscriber */
 
 import { parse } from '@applicvision/frontend-friends/parse-shape'
 
-/** @import {AnyStore} from '@applicvision/frontend-friends/store' */
+/** 
+ * @import {RouteConfig} from '../../types/type-utils.js'
+ **/
+
+/**
+ * @typedef {{layout?: string,  view?: string, load?: Function, children?: { [key: string]: SimplifiedConfig }}} SimplifiedConfig
+ */
+
+/**
+ * @template T
+ * @param {RouteConfig<T>} routerSpecification
+ */
+export function router(routerSpecification) {
+
+}
+
+
 
 /**
  * @template T
@@ -19,62 +35,35 @@ export async function getJSON(responseShape, input, init) {
 	return parse(responseShape, rawResponse)
 }
 
-/**
- * @template {{[key: string]: StringConstructor|NumberConstructor}} T
- * @typedef {{[key in keyof T]: ReturnType<T[key]>}} ParamValue
- */
 
-/**
- * @typedef {Route<any, any, any>} AnyRoute
- */
-
-/**
- * @template {string} PathTemplate
- * @template {{[key: string]: StringConstructor|NumberConstructor}} [ParamTemplate={}]
- * @template {any|null} [DataShape=null]
- **/
 export class Route {
 
-	/** @type {AnyRoute[]} */
+	/** @type {Route[]} */
 	children = []
 
 	#active = false
 
-	/** @type {AnyRoute|null} */
+	/** @type {Route|null} */
 	parent = null
 
-	/** @type {DataShape} */
-	// @ts-ignore
-	#data = null
-
 	/**
-	 * @type {ParamValue<ParamTemplate>}
-	 **/
-	// @ts-ignore
-	#params = {}
-
-	/** @type {ParamTemplate} */
-	#paramsShape
-
-	/** 
-	 * @param {PathTemplate} path
-	 * @param {{
-	 * 	params?: ParamTemplate,
-	 *	view: string,
-	 *	load?: (get: typeof getJSON, params: ParamValue<ParamTemplate>, query: URLSearchParams) => Promise<DataShape>,
-	 * 	}} config
-	 **/
-	constructor(path, { view, load, params }) {
+	 * @param {string} path
+	 * @param {string} [layout]
+	 * @param {string} [view]
+	 * @param {Function} [load]
+	 */
+	constructor(path, layout, view, load) {
 		this.path = path
 		if (path.includes(' ')) throw new Error('Path can not contain spaces')
 
 		this.view = view
+		this.layout = layout
 		this.loadData = load
-		// @ts-ignore
-		this.#paramsShape = params ?? {}
+
+		if (!layout && !view && !load) throw new Error(`Empty route: ${path}`)
 
 		/** @type {({type: 'constant', value: string} | {type: 'param', name: string})[]} */
-		this.pathParts = path.split('/').filter(Boolean).map(part =>
+		this.pathParts = path.split('/').filter((part) => part.length > 0).map(part =>
 			part.startsWith(':') ?
 				{ type: 'param', name: part.slice(1) } :
 				{ type: 'constant', value: part }
@@ -82,29 +71,20 @@ export class Route {
 	}
 
 	/**
-	 * @template {string} ChildPathTemplate
-	 * @template {{[key: string]: StringConstructor|NumberConstructor}} [ChildParamTemplate={}]
-	 * @template {any} [ChildDataShape=null]
-	 * @param {ChildPathTemplate} path
-	 * @param {{
-		* params?: ChildParamTemplate,
-		* view: string,
-		* load?: (get: typeof getJSON, params: ParamValue<ChildParamTemplate & ParamTemplate>, query: URLSearchParams) => Promise<ChildDataShape>,
-		* name?: string}} config
-	*/
-	child(path, { params, ...config }) {
-		const combinedParams = { ...this.#paramsShape, ...params }
-		const child = new Route(`${this.path}/${path}`, {
-			...config,
-			// @ts-ignore ts2322
-			params: combinedParams
-		})
+	 * @param {string} path
+	 * @param {string} [layout]
+	 * @param {string} [view]
+	 * @param {Function} [load]
+	 */
+	childRoute(path, layout, view, load) {
+		if (!path) throw new Error('A child route must add a path segment')
+		const child = new Route(`${this.path}/${path}`, layout, view, load)
 		this.children.push(child)
 		child.parent = this
 		return child
 	}
 
-	/** @type {AnyRoute[]} */
+	/** @type {Route[]} */
 	get routeList() {
 		return [
 			this,
@@ -112,78 +92,31 @@ export class Route {
 		]
 	}
 
-	/** @type {Set<RouteSubscriber>} */
-	#subscribers = new Set()
-
-	/**
-	 * @param {RouteSubscriber} subscriber
-	 */
-	subscribe(subscriber) {
-		subscriber.subscriptions.add(this)
-		this.#subscribers.add(subscriber)
-	}
-
-	/**
-	 * @param {RouteSubscriber} subscriber
-	 */
-	unsubscribe(subscriber) {
-		this.#subscribers.delete(subscriber)
-	}
-
 	/**
 	 * @param {typeof getJSON} get
-	 * @param {ParamValue<ParamTemplate>} params
+	 * @param {Record<string, string>} params
 	 * @param {URLSearchParams} query
 	 */
 	async load(get, params, query) {
-		const data = await this.loadData?.(get, params, query)
-		if (data) {
-			this._setData(data)
-		}
-		return data ?? null
-	}
-
-	get data() {
-		const subscriber = autoSubscribers.at(-1)
-		if (subscriber) {
-			this.subscribe(subscriber)
-		}
-		return this.#data
+		return this.loadData?.(get, params, query)
 	}
 
 	/**
-	 * @private
-	 * @param {DataShape} data
-	*/
-	_setData(data) {
-		this.#data = data
-		this.#subscribers.forEach(subscriber => subscriber.routeChanged())
-	}
-
-	get params() {
-		const subscriber = autoSubscribers.at(-1)
-		if (subscriber) {
-			this.subscribe(subscriber)
-		}
-		return this.#params
-	}
-
-	/**
-	 * @private
-	 * @param {ParamValue<ParamTemplate>} params
-	 */
-	_setParams(params) {
-		this.#params = params
-		this.#subscribers.forEach(subscriber => subscriber.routeChanged())
-	}
-
-	/**
-	 * @private
 	 * @param {boolean} activeValue
 	 */
-	_setActive(activeValue) {
+	#setActive(activeValue) {
 		this.#active = activeValue
-		this.parent?._setActive(activeValue)
+		if (this.parent) {
+			this.parent.#setActive(activeValue)
+		}
+	}
+
+	/**
+	 * @param {Route} route
+	 * @param {boolean} activeValue
+	 */
+	static updateActiveState(route, activeValue) {
+		route.#setActive(activeValue)
 	}
 
 	get active() {
@@ -191,7 +124,7 @@ export class Route {
 	}
 
 	/**
-	 * @type {AnyRoute[]}
+	 * @type {Route[]}
 	 */
 	get parentChain() {
 		if (this.parent) {
@@ -207,66 +140,87 @@ export class Route {
 
 		if (this.pathParts.length != pathParts.length) return null
 
-		/** @type {ParamValue<ParamTemplate>} */
-		// @ts-ignore
-		const params = Object.fromEntries(Object.keys(this.#params ?? {}).map(paramName => [paramName, undefined]))
+
+		/** @type {Record<string, string>} */
+		const params = {}
 		for (let index = 0; index < pathParts.length; index += 1) {
-			const part = this.pathParts[index]
-			if (part.type == 'constant' && part.value != pathParts[index]) {
+			const routePart = this.pathParts[index]
+			const actualPathPart = pathParts[index]
+			if (routePart.type == 'constant' && routePart.value != actualPathPart) {
 				return null
 			}
-			if (part.type == 'param') {
-				const typeFunction = this.#paramsShape[part.name]
-				// @ts-ignore
-				params[part.name] = typeFunction ? typeFunction(pathParts[index]) : pathParts[index]
+			if (routePart.type == 'param') {
+				params[routePart.name] = actualPathPart
 			}
 		}
 		return { params }
 	}
-
-	/**
-	 * @param {ParamValue<ParamTemplate>} paramValues
-	 */
-	linkWith(paramValues) {
-
-		return Object.entries(paramValues).reduce(
-			(path, [paramKey, paramValue]) =>
-				path.replace(`:${paramKey}`, String(paramValue))
-			,
-			/** @type {string} */(this.path)
-		)
-	}
 }
 
 
-/** @template {{[key:string]: AnyStore}} T */
 export class BaseRouter {
 
-	/** @type {AnyRoute | null} */
-	#activeRoute = null
+	/** @type {Route | null} */
+	#_activeRoute = null
+
+	/** @param {Route|null} route */
+	set #activeRoute(route) {
+		if (this.#_activeRoute) {
+			Route.updateActiveState(this.#_activeRoute, false)
+		}
+		if (route) Route.updateActiveState(route, true)
+		this.#_activeRoute = route
+	}
 
 	/** @type {{[key: string]: any}} */
 	#activeParams = {}
+
+	/** @type {unknown|null} */
+	#activeRouteData = null
+
+	get routeData() {
+		return this.#activeRouteData
+	}
+
+	/**
+	 * @protected
+	 * @param {unknown} data
+	 */
+	setCurrentRouteData(data) {
+		this.#activeRouteData = data
+	}
 
 	#activeQuery = new URLSearchParams()
 
 	/** @type {string|null} */
 	#activePath = null
 
-	/** @type {AnyRoute[]|null} */
-	#activeParentChain = null
+	#basePath = '/'
+	get basePath() { return this.#basePath }
 
 	/**
-	 * @param {{store: T, viewDirectory: string, baseView?: string, routerLocation?: string}} setup
-	 * @param {AnyRoute[]} rootRoutes
+	 * @param {string} basePath
+	 * @param {SimplifiedConfig} config
 	 */
-	constructor(setup, rootRoutes) {
-		this.store = setup.store
-		this.viewDirectory = setup.viewDirectory.replace(/\/$/, '')
-		this.routerLocation = setup.routerLocation
-		this.baseView = setup.baseView
-		this.routes = rootRoutes.flatMap(route => route.routeList)
-		// console.log('allroutes', this.routes)
+	constructor(basePath, config) {
+		const { layout, view, load, children } = config
+		const rootRoute = new Route(basePath, layout, view, load)
+		this.#basePath = basePath
+		this.#addChildRoutes(rootRoute, children)
+		this.routes = rootRoute.routeList
+	}
+
+	/**
+	 * @param {Route} route
+	 * @param {{[key: string]: SimplifiedConfig}|undefined} childrenSpec
+	 */
+	#addChildRoutes(route, childrenSpec) {
+		if (!childrenSpec) return
+		for (const key in childrenSpec) {
+			const { view, layout, load, children } = childrenSpec[key]
+			const childRoute = route.childRoute(key, layout, view, load)
+			this.#addChildRoutes(childRoute, children)
+		}
 	}
 
 	/**
@@ -276,17 +230,10 @@ export class BaseRouter {
 		const [path, query] = pathString.split('?')
 		const parts = path.split('/').filter(Boolean)
 
-		// @ts-ignore
-		this.#activeRoute?._setActive(false)
-
 		for (const route of this.routes) {
 			const match = route.match(parts)
 			if (match) {
 				this.#activeRoute = route
-				// @ts-ignore
-				route._setActive(true)
-				// @ts-ignore
-				route._setParams(match.params)
 				this.#activeParams = match.params
 				this.#activePath = pathString
 				this.#activeQuery = new URLSearchParams(query)
@@ -296,29 +243,12 @@ export class BaseRouter {
 		this.#activePath = null
 		this.#activeParams = {}
 		this.#activeRoute = null
-		this.#activeParentChain = null
 		this.#activeQuery = new URLSearchParams()
 		return false
 	}
 
-	/**
-	 * @abstract
-	 */
-	async render() {
-		// Implemented by subclass
-		return ''
-	}
-
-	/**
-	 * @abstract
-	 * @param {string} destination
-	 */
-	async transitionTo(destination) { }
-
-	/**
-	 * @param {any=} args
-	 */
-	loadRoute(args) {
+	/** @param {unknown} [arg]  */
+	loadRoute(arg) {
 		return this.route?.load(this.getJSON, this.#activeParams, this.query)
 	}
 
@@ -342,7 +272,7 @@ export class BaseRouter {
 
 
 	get route() {
-		return this.#activeRoute
+		return this.#_activeRoute
 	}
 
 	get params() {
@@ -357,11 +287,37 @@ export class BaseRouter {
 		return this.#activePath
 	}
 
-	get parentChain() {
-		return this.#activeParentChain
-	}
-
 	static Route = Route
+
+	/**
+	 * @template T
+	 * @overload
+	 * @param {RouteConfig<T>} config
+	 * @return {BaseRouter}
+	*/
+
+	/**
+	 * @template T
+	 * @overload
+	 * @param {string|RouteConfig<T>} base
+	 * @param {RouteConfig<T>} config
+	 * @return {BaseRouter}
+	 */
+
+	/**
+	 * @template T
+	 * @param {string|RouteConfig<T>} baseOrConfig
+	 * @param {RouteConfig<T>} [config]
+	 */
+	static create(baseOrConfig, config) {
+		if (typeof baseOrConfig == 'string') {
+			if (typeof config == 'object') {
+				return new this(baseOrConfig, config)
+			}
+			throw new Error('Missing config')
+		}
+		return new this('', baseOrConfig)
+	}
 }
 
 /** @type {RouteSubscriber[]} */
@@ -382,12 +338,34 @@ export function autoSubscribe(subscriber, callback) {
 	}
 }
 
-/**
- * @template {string} PathTemplate
- * @template {{[key: string]: StringConstructor|NumberConstructor}} ParamTemplate
- * @param {PathTemplate} path
- * @param {{ params?: ParamTemplate, view: string, name?: string }} config
- */
-export function route(path, config) {
-	return new Route(path, config)
-}
+
+
+
+BaseRouter.create({
+	layout: 'index.html',
+	view: 'start.html',
+	children: {
+		users: {
+			layout: 'usercommon.html',
+			view: 'userlist.html',
+			async load() { },
+			children: {
+				new: {
+					view: 'newuser.html'
+				},
+				':id': {
+					view: 'user.html',
+					async load(get, params) {
+					},
+					children: {
+						':idd': {
+							view: '',
+							async load(get, params) {
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+})

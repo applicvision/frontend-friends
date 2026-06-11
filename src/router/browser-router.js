@@ -1,10 +1,8 @@
 import { seedStore } from '@applicvision/frontend-friends/store'
 import { BaseRouter } from './base-router.js'
-import { register as registerIslandComponent } from '@applicvision/frontend-friends/router/dynamic-island'
 
-/** @import {AnyRoute} from './base-router.js' */
+/** @import {Route} from './base-router.js' */
 
-/** @extends BaseRouter<any> */
 export class Router extends BaseRouter {
 
 	/** @type {{[key: string]: string}} */
@@ -15,7 +13,7 @@ export class Router extends BaseRouter {
 	 */
 	async #loadViewFile(view) {
 		if (!this.#viewCache[view]) {
-			const path = `${this.viewDirectory}/${view}`
+			const path = `__route-view/${view}`
 			const response = await fetch(path)
 
 			this.#viewCache[view] = await response.text()
@@ -24,13 +22,13 @@ export class Router extends BaseRouter {
 	}
 
 	/**
-	 * @param {AnyRoute?} previousRoute
+	 * @param {Route?} previousRoute
 	 */
 	async loadView(previousRoute) {
 
 		if (!this.route) throw new Error('Can not load view because there is no current route')
 
-		/** @type {AnyRoute|null} */
+		/** @type {Route|null} */
 		let commonParent = null
 		let index = 0
 		while (
@@ -45,7 +43,7 @@ export class Router extends BaseRouter {
 
 		/** @type {Element?} */
 		let container = null
-		/** @type {AnyRoute[]?} */
+		/** @type {Route[]?} */
 		let routeChainToLoad = null
 
 		if (commonParent) {
@@ -88,18 +86,16 @@ export class Router extends BaseRouter {
 		await transition.finished
 	}
 
-	/**
-	 * @param {string} path
-	 */
-	async mount(path) {
-		this.resolve(path)
-		/** @type {{route: any, store: any}} */
-		const initialData = JSON.parse(document.getElementById('routedata')?.textContent ?? '')
-		// @ts-ignore
-		this.route._setData(initialData.route)
-		navigation.updateCurrentEntry({ state: initialData.route })
-		registerIslandComponent(this.viewDirectory)
-		seedStore(this.store, initialData.store)
+
+	async mount() {
+		const { pathname } = location
+		this.resolve(pathname)
+
+		const dataTransfer = document.getElementById('routedata')?.textContent
+		const initialData = dataTransfer ? JSON.parse(dataTransfer) : null
+
+		navigation.updateCurrentEntry({ state: initialData })
+		// seedStore(this.store, initialData.store)
 		navigation.addEventListener('navigate', (event) => {
 
 			if (

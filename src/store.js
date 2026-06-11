@@ -167,7 +167,7 @@ class ResourceStore {
 
 /**
  * @template {any} T
- * @typedef {T extends abstract new (...args: any) => any ? InstanceType<T> : T} StoreType
+ * @typedef {T extends new (...args: any) => any ? InstanceType<T> : T} StoreType
  */
 
 /** 

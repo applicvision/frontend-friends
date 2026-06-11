@@ -47,10 +47,9 @@
       "default": "./src/attribute-helpers.js"
     },
     "./router": {
-      "node": "./src/router/router.js",
+      "node": "./src/router/server-router.js",
       "default": "./src/router/browser-router.js"
     },
-    "./router/dynamic-island": "./src/router/dynamic-island.js",
     "./router/router-link": "./src/router/router-link.js"
   },
   "scripts": {

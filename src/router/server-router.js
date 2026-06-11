@@ -2,10 +2,16 @@ import { Server, IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { readFile } from 'node:fs/promises'
 
-import { BaseRouter } from './base-router.js'
-import { clearStore, serialize } from '../store.js'
+import { BaseRouter, Route } from './base-router.js'
+import { serialize } from '../store.js'
 import { DynamicIsland } from '../dynamic-island.js'
 import { parse } from '@applicvision/frontend-friends/parse-shape'
+import { DynamicFragment, html } from '../dynamic-fragment.js'
+
+/**
+ * @import {getStore} from '../store.js'
+ * @typedef {ReturnType<getStore>} StoreObject
+ */
 
 class FakeResponse extends ServerResponse {
 	#text = ''
@@ -58,36 +64,76 @@ class FakeResponse extends ServerResponse {
 
 const islandContainerRegex = /<dynamic-island href="(?<islandHref>.+?)">(.*?)<\/dynamic-island>/sdg
 
-/** @extends BaseRouter<any> */
 export class Router extends BaseRouter {
 
 	/**
-	 * @param {string} view
+	 * @param {string} filePath
 	 */
-	async #loadViewFile(view) {
-		const fileContents = await readFile(path.join(this.viewDirectory, view))
-		return fileContents.toString()
+	async #loadViewFile(filePath) {
+		const extension = path.extname(filePath)
+		if (extension == '.js' || extension == '.mjs') {
+			const { default: defaultExport } = await import(filePath)
+			let view = defaultExport
+			if (typeof defaultExport == 'function') {
+				view = await defaultExport(this.path)
+			}
+			if (typeof view == 'string') {
+				return view
+			}
+			if (view instanceof DynamicFragment) {
+				return view.staticHtmlString
+			}
+			throw new Error('Invalid view content')
+		} else {
+			const fileContents = await readFile(filePath)
+			return fileContents.toString()
+		}
 	}
 
-	async loadView() {
-		if (!this.route) throw new Error('Can not load view because there is no current route')
+	get #browserTransfer() {
+		return html`
+		<!-- router-data-start -->
+		<script id="routedata" type="application/json">${JSON.stringify(this.routeData, null, 2) ?? ''}</script>
+		<!-- router-data-end -->
+		`
+	}
+
+	/**
+	 * @param {Route} [stopAtRoute]
+	 */
+	async loadView(stopAtRoute) {
+		// if (!this.route) throw new Error('Can not load view because there is no current route')
 
 		/** @type {string[]} */
 		const viewFiles = []
-		if (this.baseView) {
-			viewFiles.push(this.baseView)
+
+		if (this.route?.view) {
+			viewFiles.push(this.route.view)
 		}
-		viewFiles.push(...this.route.parentChain.map(route => route.view))
-		viewFiles.push(this.route.view)
+
+		let route = this.route
+
+		while (route && route != stopAtRoute) {
+			const useView = route == this.route ? route.view : route.layout
+			if (route.layout) {
+				viewFiles.push(route.layout)
+			}
+			route = route.parent
+		}
 
 		try {
-			const views = await Promise.all(viewFiles.map(file => this.#loadViewFile(file)))
-			return views.reduce((parentsView, view, index) => parentsView
+			const views = await Promise.all(viewFiles.map(file => this.#loadViewFile(path.join(this.#viewDirectory, file))))
+			return views.reduceRight((parentsView, view, index) => parentsView ? parentsView
 				.replace(
-					'<router-outlet></router-outlet>',
-					`<router-outlet owner="${viewFiles[index - 1]}">${view}</router-outlet>`
-				)
-			)
+					/<router-outlet>.*?<\/router-outlet>/,
+					html`
+					${index == 0 && this.#transferToBrowser ? this.#browserTransfer : ''}
+					<!-- router-outlet-start -->
+					${view}
+					<!-- router-outlet-end -->
+					`.staticHtmlString
+				) : view
+				, '')
 
 		} catch (err) {
 			console.log('Could not load view', err)
@@ -116,8 +162,8 @@ export class Router extends BaseRouter {
 	/**
 	 * @param {IncomingMessage} request
 	 */
-	async loadRoute(request) {
-		await this.route?.load(
+	loadRoute(request) {
+		return this.route?.load(
 			(responseShape, input, init) =>
 				typeof input == 'string' && !input.startsWith('http') ?
 					this.#injectRequest(responseShape, input, request) :
@@ -128,22 +174,39 @@ export class Router extends BaseRouter {
 		)
 	}
 
+	#viewDirectory = '.'
+
+	#mountPath = '/'
+
+	#transferToBrowser = false
+
 	/** @type {Server?} */
 	#server = null
 	/**
-	 * @param {string} path
-	 * @return {(request: IncomingMessage, response: ServerResponse, server: Server) => Promise<void>}
+	 * @param {{viewDirectory?: string, transferToBrowser?: boolean}} [options]
+	 * @return {(request: IncomingMessage, response: ServerResponse, server: Server) => Promise<unknown>}
 	 */
-	mount(path = '/') {
+	mount(options) {
+
+		this.#viewDirectory = options?.viewDirectory ?? '.'
+		this.#transferToBrowser = options?.transferToBrowser ?? false
 		return async (request, response, server) => {
 			this.#server ??= server
-			if (request.url?.startsWith(path)) {
+			if (request.url?.startsWith(this.basePath)) {
+
+				console.log('in router', request.url)
+
+				if (request.url.startsWith(`${this.basePath}/__view`)) {
+					console.log('TODO: handle async view request')
+					response.writeHead(200)
+					response.end('<h1>asdasd</h1>')
+					return
+				}
 
 				if (this.resolve(request.url)) {
-					clearStore(this.store)
 					try {
-						await this.loadRoute(request)
-						const responseHtml = await this.render()
+						this.setCurrentRouteData(await this.loadRoute(request))
+						const responseHtml = await this.loadView()
 						response.writeHead(200, { 'content-type': 'text/html' })
 						response.end(responseHtml)
 					} catch (err) {
@@ -159,7 +222,8 @@ export class Router extends BaseRouter {
 		}
 	}
 
-	async render() {
+	/** @param {string} routerLocation */
+	async #buildHtml(routerLocation) {
 		const view = await this.loadView()
 		const foundIslands = view.matchAll(islandContainerRegex)
 
@@ -179,7 +243,7 @@ export class Router extends BaseRouter {
 		const islandsHtml = await Promise.all(islandsToLoad.map(async islandPath => {
 			const [filePath, exportName = 'default'] = islandPath.href.split('?')
 
-			const { [exportName]: island } = await import(path.resolve(this.viewDirectory, filePath))
+			const { [exportName]: island } = await import(path.resolve(this.#viewDirectory, filePath))
 			// TODO: resolve files using some config for public directory
 			/** @type {{default: DynamicIsland<any>}} */
 			return island.hydratable
@@ -196,7 +260,7 @@ export class Router extends BaseRouter {
 			store: serialize(this.store)
 		}, null, 2)}</script>
 		<script type="module">
-			import router from '${this.routerLocation}'
+			import router from '${routerLocation}'
 			router.mount('${this.path}')
 		</script>
 		`
