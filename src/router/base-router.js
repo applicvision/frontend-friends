@@ -3,7 +3,7 @@
 import { parse } from '@applicvision/frontend-friends/parse-shape'
 
 /** 
- * @import {RouteConfig} from '../../types/type-utils.js'
+ * @import {RouteConfig, AllroutePaths, RouteData} from '../../types/type-utils.js'
  **/
 
 /**
@@ -158,6 +158,9 @@ export class Route {
 }
 
 
+/** 
+ * @template [Config=any] 
+ */
 export class BaseRouter {
 
 	/** @type {Route | null} */
@@ -180,6 +183,15 @@ export class BaseRouter {
 
 	get routeData() {
 		return this.#activeRouteData
+	}
+
+	/**
+	 * @template {AllroutePaths<Config>} Path
+	 * @param {Path} routePath
+	 * @return {RouteData<Config,Path>}
+	 */
+	routeDataFor(routePath) {
+		return this.routeData
 	}
 
 	/**
@@ -279,6 +291,10 @@ export class BaseRouter {
 		return this.#activeParams
 	}
 
+	paramsFor(path) {
+
+	}
+
 	get query() {
 		return this.#activeQuery
 	}
@@ -293,7 +309,7 @@ export class BaseRouter {
 	 * @template T
 	 * @overload
 	 * @param {RouteConfig<T>} config
-	 * @return {BaseRouter}
+	 * @return {BaseRouter<T>}
 	*/
 
 	/**
@@ -301,7 +317,7 @@ export class BaseRouter {
 	 * @overload
 	 * @param {string|RouteConfig<T>} base
 	 * @param {RouteConfig<T>} config
-	 * @return {BaseRouter}
+	 * @return {BaseRouter<T>}
 	 */
 
 	/**

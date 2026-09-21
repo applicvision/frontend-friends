@@ -3,7 +3,6 @@ import { routerPlugin, runWithPlugins, storePlugin } from './render-hooks.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
- * @import {RouteSubscriber, AnyRoute} from './router/base-router.js'
  * @import {FFPlugin, StateShape, RefsShape, PluginsShape, RenderContext} from '../types/type-utils.js'
  */
 
