@@ -1,54 +1,53 @@
 import { DynamicIsland } from '@applicvision/frontend-friends/island'
 
 export class RouteIslandContainer extends HTMLElement {
-	static observedAttributes = ['href']
+	static observedAttributes = ['src']
 
 	/** @type {DynamicIsland<any>|null} */
 	#island = null
 
+	/** @type {ElementInternals} */
+	#internals
+
+	constructor() {
+		super()
+		this.#internals = this.attachInternals()
+	}
+
 	/**
 	 * @param {string} attribute
-	 * @param {string|null} oldHref
-	 * @param {string|null} newHref
+	 * @param {string|null} oldSrc
+	 * @param {string|null} newSrc
 	 */
-	attributeChangedCallback(attribute, oldHref, newHref) {
-		if (attribute == 'href' && newHref) {
-			this.hydrate(newHref)
+	attributeChangedCallback(attribute, oldSrc, newSrc) {
+		if (attribute == 'src' && newSrc) {
+			this.hydrate(newSrc)
 		}
 	}
 
 	disconnectedCallback() {
+		// Should it really unmount
 		this.#island?.unmount()
 	}
 
 	/**
-	 * @param {string} islandHref
+	 * @param {string} islandSrc
 	 */
-	async hydrate(islandHref) {
+	async hydrate(islandSrc) {
 		/** @type {{default: DynamicIsland<any>}} */
-		const { default: island } = await import(viewDirectory + '/' + islandHref)
+		const { default: island } = await import(`/_ff-router/resource/${islandSrc}`)
 
 		this.#island = island
-		const routerContainer = this.closest('router-outlet')
 
-		if (routerContainer?.hasAttribute('dynamic')) {
-			island.mount(this)
-		} else {
-			island.hydrate(this)
-		}
+		island.hydrate(this)
+		this.#internals.states.add('hydrated')
+
+		console.log(this.#internals.states, this.matches('route-island:state(hydrated)'))
+
+
 	}
 
 	static {
-		//customElements.define('route-island', RouteIslandContainer)
+		customElements.define('route-island', RouteIslandContainer)
 	}
-}
-
-let viewDirectory = ''
-
-/**
- * @param {string} viewDir
- */
-export function register(viewDir) {
-	viewDirectory = viewDir
-	customElements.define('route-island', RouteIslandContainer)
 }

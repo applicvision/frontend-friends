@@ -1,5 +1,5 @@
-import { seedStore } from '@applicvision/frontend-friends/store'
 import { BaseRouter } from './base-router.js'
+import './route-island.js'
 
 /** @import {Route} from './base-router.js' */
 
@@ -87,14 +87,22 @@ export class Router extends BaseRouter {
 	}
 
 
-	async mount() {
-		const { pathname } = location
-		this.resolve(pathname)
+	async mount(options = {}) {
+		const dataTransfer = document.getElementById('ff-router-data')?.textContent
 
-		const dataTransfer = document.getElementById('routedata')?.textContent
+		/** @type {{data?: unknown, store?: unknown} | null} */
 		const initialData = dataTransfer ? JSON.parse(dataTransfer) : null
 
+		super.mount({
+			client: {
+				path: location.pathname + location.search,
+				storeData: initialData?.store,
+				routeData: initialData?.data
+			}
+		})
+
 		navigation.updateCurrentEntry({ state: initialData })
+
 		// seedStore(this.store, initialData.store)
 		navigation.addEventListener('navigate', (event) => {
 
@@ -106,14 +114,11 @@ export class Router extends BaseRouter {
 				return
 			}
 
-			const url = new URL(event.destination.url)
-
 			const previousRoute = this.route
 
-			const routeExists = this.resolve(url.pathname)
+			this.resolveAndUpdate(new URL(event.destination.url))
 
-			if (!routeExists) return
-
+			if (!this.route) return
 
 			const isTraversal = event.navigationType == 'traverse'
 			const lastState = event.destination.getState()
@@ -121,17 +126,22 @@ export class Router extends BaseRouter {
 			event.intercept({
 				handler: async () => {
 					if (isTraversal && lastState) {
+						// TODO: handle page change too
+						this.setData(lastState)
+						this.notifySubscribers()
+						return
+					}
 
-						// @ts-ignore
-						this.route._setData(lastState)
-					} else {
-
+					if (previousRoute == this.route) {
 						const data = await this.loadRoute()
+						this.route?.store?.insert(data)
+						this.setData(data)
 						navigation.updateCurrentEntry({ state: data })
+						this.notifySubscribers()
+						return
 					}
-					if (this.route != previousRoute) {
-						await this.loadView(previousRoute)
-					}
+
+					await this.loadView(previousRoute)
 				}
 			})
 		})

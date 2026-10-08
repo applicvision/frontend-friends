@@ -47,8 +47,14 @@
       "default": "./src/attribute-helpers.js"
     },
     "./router": {
-      "node": "./src/router/server-router.js",
-      "default": "./src/router/browser-router.js"
+      "node": {
+        "default": "./src/router/server-router.js",
+        "types": "./types/src/server-router.d.ts"
+      },
+      "default": {
+        "default": "./src/router/browser-router.js",
+        "types": "./types/src/browser-router.d.ts"
+      }
     },
     "./router/router-link": "./src/router/router-link.js"
   },

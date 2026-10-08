@@ -1,5 +1,6 @@
 import type { Prettify, UnionToIntersection } from "../type-utils.js"
 import { DataShape } from "./parse-shape.js"
+import { ResourceStore } from "./store.js"
 
 export class BaseRouter<Routes> {
 	mount(...args: any[]): any
@@ -7,6 +8,10 @@ export class BaseRouter<Routes> {
 	paramsFor<T extends keyof Routes>(path: T): Routes[T] extends { params: infer P } ? P : {}
 
 	dataFor<T extends keyof Routes>(path: T): Routes[T] extends { data: infer P } ? P : {}
+
+	linkTo<T extends keyof Routes & string>(path: T, ...params: keyof ExtractParams<T> extends never ?
+		[] : [params: Prettify<ExtractParams<T>>]
+	): string
 
 	get query(): URLSearchParams
 
@@ -20,6 +25,7 @@ type Children<T> = unknown extends T ? Record<string, unknown> : T extends { chi
 export type RouteSpec<T, Path extends string = ''> = {
 	layout?: string
 	view?: string
+	store?: ResourceStore<any>,
 	load?: (
 		get: <S>(shape: S, input: string | URL | Request, init?: RequestInit) => Promise<DataShape<S>>,
 		params: Prettify<ExtractParams<Path>>,

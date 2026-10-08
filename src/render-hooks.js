@@ -3,7 +3,7 @@ import { autoSubscribe as routerAutoSubscribe } from './router/base-router.js'
 
 /**
  * @import {FFPlugin, PluginCreator, PluginFactory, PluginStateShape} from '../types/type-utils.js'
- * @import {AnyRoute} from './router/base-router.js'
+ * @import {BaseRouter} from './router/base-router.js'
  */
 
 /**
@@ -95,20 +95,18 @@ export const storePlugin = definePlugin((invalidate) => {
 
 export const routerPlugin = definePlugin((invalidate, element) => {
 	const subscriber = {
-		/** @type {Set<AnyRoute>} */
-		subscriptions: new Set(),
+		/** @type {BaseRouter|undefined} */
+		router: undefined,
 		routeChanged: invalidate
 	}
 
 	return {
 		middleware(render) {
-			subscriber.subscriptions.forEach(sub => sub.unsubscribe(subscriber))
-			subscriber.subscriptions.clear()
 			routerAutoSubscribe(subscriber, render)
 		},
 		cleanup() {
-			subscriber.subscriptions.forEach(sub => sub.unsubscribe(subscriber))
-			subscriber.subscriptions.clear()
+			subscriber.router?.unsubscribe(subscriber)
+			delete subscriber.router
 		}
 	}
 })

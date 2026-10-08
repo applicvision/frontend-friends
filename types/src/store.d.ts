@@ -45,8 +45,6 @@ export function seedStore(store: { [key: string]: ResourceStore<any> }, data: an
 
 export function clearStore(store: { [key: string]: ResourceStore<any> }): void
 
-export function serialize<T extends {
-	[key: string]: ResourceStore<any>;
-}>(store: T): { [key in keyof T]: T[key] extends ResourceStore<infer Type> ? Type[] : never; }
+export function serialize<T extends Record<string, ResourceStore<any>>>(store: T): { [key in keyof T]: T[key] extends ResourceStore<infer Type> ? Type[] : never; }
 
 export type { ResourceStore }
