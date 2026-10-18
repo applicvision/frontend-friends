@@ -2,7 +2,7 @@
 
 const anyChangeSubscriptionName = Symbol.for('all')
 
-/** @template {{[key: string]: any}} T */
+/** @template {object} T */
 class ResourceStore {
 	/** @type {{[id: string]: T}} */
 	#state = {}
@@ -119,15 +119,18 @@ class ResourceStore {
 	upsert(...entries) {
 		return entries.flatMap(entry => {
 			if (entry instanceof Array) {
-				return entry.map(newEntry =>
+				return entry.map(newEntry => {
 					this.#state[newEntry.id] ?
-						this.update(newEntry.id, /** @type {T} */(/** @type {unknown} */(newEntry))) :
+						this.update(newEntry.id, newEntry) :
 						this.insertWithId(newEntry.id, /** @type {T} */(/** @type {unknown} */(newEntry)))
-				)
+					return newEntry.id
+				})
 			}
-			return this.#state[entry.id] ?
-				this.update(entry.id, /** @type {T} */(/** @type {unknown} */(entry))) :
+			this.#state[entry.id] ?
+				this.update(entry.id, entry) :
 				this.insertWithId(entry.id, /** @type {T} */(/** @type {unknown} */(entry)))
+
+			return entry.id
 		})
 	}
 
@@ -142,6 +145,7 @@ class ResourceStore {
 		if (this.#state[id]) {
 			throw new Error(`Resource of type ${this.#name} with id ${id} already exists`)
 		}
+
 		const result = this.#state[id] = newEntry
 
 		this.#notifySubscribers(id)

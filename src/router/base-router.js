@@ -71,7 +71,12 @@ export class Route {
 	childRoute(path, layout, view, load, store) {
 		if (!path) throw new Error('A child route must add a path segment')
 		const child = new Route([this.path, path].filter(Boolean).join('/'), layout, view, load, store)
-		this.children.push(child)
+		// Put constant routes first
+		if (path.startsWith(':')) {
+			this.children.push(child)
+		} else {
+			this.children.unshift(child)
+		}
 		child.parent = this
 		return child
 	}
@@ -94,13 +99,6 @@ export class Route {
 	}
 
 	/**
-	 * @param {Route} route
-	 * @param {boolean} activeValue
-	 */
-	static updateActiveState(route, activeValue) {
-	}
-
-	/**
 	 * @type {Route[]}
 	 */
 	get parentChain() {
@@ -108,6 +106,14 @@ export class Route {
 			return [this.parent.parentChain, this.parent].flat()
 		}
 		return []
+	}
+
+	/** @type {string} */
+	get fullPath() {
+		if (this.parent) {
+			return this.parent.fullPath + '/' + this.path
+		}
+		return this.path
 	}
 
 	/**
@@ -137,16 +143,7 @@ export class Route {
 export class BaseRouter {
 
 	/** @type {Route | null} */
-	#_activeRoute = null
-
-	/** @param {Route|null} route */
-	set #activeRoute(route) {
-		if (this.#_activeRoute) {
-			Route.updateActiveState(this.#_activeRoute, false)
-		}
-		if (route) Route.updateActiveState(route, true)
-		this.#_activeRoute = route
-	}
+	#activeRoute = null
 
 	/** @type {Record<string, string>} */
 	#activeParams = {}
@@ -239,7 +236,6 @@ export class BaseRouter {
 
 	/** @param {string|URL} pathOrUrl */
 	resolve(pathOrUrl) {
-		console.log('resolving', pathOrUrl)
 		let path = '', query = null
 
 		if (typeof pathOrUrl == 'string') {
@@ -300,7 +296,7 @@ export class BaseRouter {
 	}
 
 	get route() {
-		return this.#_activeRoute
+		return this.#activeRoute
 	}
 
 	get params() {

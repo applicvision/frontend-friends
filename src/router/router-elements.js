@@ -1,4 +1,9 @@
-import { DynamicIsland } from '@applicvision/frontend-friends/island'
+import { DeclarativeElement, html } from '@applicvision/frontend-friends'
+
+/**
+ * @import { DynamicIsland } from '@applicvision/frontend-friends/island'
+ * @import {Router} from './browser-router.js'
+ */
 
 export class RouteIslandContainer extends HTMLElement {
 	static observedAttributes = ['src']
@@ -34,6 +39,8 @@ export class RouteIslandContainer extends HTMLElement {
 	 * @param {string} islandSrc
 	 */
 	async hydrate(islandSrc) {
+
+		// TODO: fix basepath
 		/** @type {{default: DynamicIsland<any>}} */
 		const { default: island } = await import(`/_ff-router/resource/${islandSrc}`)
 
@@ -46,8 +53,37 @@ export class RouteIslandContainer extends HTMLElement {
 
 
 	}
+}
 
-	static {
-		customElements.define('route-island', RouteIslandContainer)
+export class FFOutlet extends DeclarativeElement {
+
+	get owner() {
+		return this.getAttribute('owner') ?? ''
 	}
+
+	connectedCallback() {
+		super.connectedCallback()
+		router?.registerOutlet(this)
+
+	}
+
+	disconnectedCallback() {
+		router?.unregsiterOutlet(this)
+	}
+
+	render() {
+		return html`<slot></slot>`
+	}
+}
+
+/** @type {Router|null} */
+let router = null
+
+/**
+ * @param {Router} _router
+ */
+export function register(_router) {
+	router = _router
+	customElements.define('ff-island', RouteIslandContainer)
+	customElements.define('ff-outlet', FFOutlet)
 }

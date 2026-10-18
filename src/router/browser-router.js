@@ -1,7 +1,9 @@
 import { BaseRouter } from './base-router.js'
-import './route-island.js'
+import { FFOutlet, register } from './router-elements.js'
 
-/** @import {Route} from './base-router.js' */
+/**
+ * @import {Route} from './base-router.js' 
+ **/
 
 export class Router extends BaseRouter {
 
@@ -21,69 +23,50 @@ export class Router extends BaseRouter {
 		return this.#viewCache[view]
 	}
 
-	/**
-	 * @param {Route?} previousRoute
-	 */
-	async loadView(previousRoute) {
+	/** @type {Record<string, FFOutlet>} */
+	#outlets = {}
+
+	/** @param {FFOutlet} outlet */
+	registerOutlet(outlet) {
+		this.#outlets[outlet.owner] = outlet
+		console.log('outlets', this.#outlets)
+	}
+
+	/** @param {FFOutlet} outlet */
+	unregsiterOutlet(outlet) {
+		delete this.#outlets[outlet.owner]
+	}
+
+	async loadView() {
 
 		if (!this.route) throw new Error('Can not load view because there is no current route')
 
+
+		/** @type {FFOutlet|null} */
+		let outlet = null
 		/** @type {Route|null} */
-		let commonParent = null
-		let index = 0
-		while (
-			previousRoute &&
-			index < this.route.parentChain.length &&
-			index < previousRoute.parentChain.length &&
-			previousRoute.parentChain[index] == this.route.parentChain[index]
-		) {
-			commonParent = this.route.parentChain[index]
-			index += 1
+		let route = this.route
+		while (!outlet && route) {
+			outlet = this.#outlets[route.path]
+			route = route.parent
 		}
 
-		/** @type {Element?} */
-		let container = null
-		/** @type {Route[]?} */
-		let routeChainToLoad = null
+		if (!outlet) throw new Error('Could not find outlet')
 
-		if (commonParent) {
-			container = document.querySelector(`router-outlet[owner="${commonParent.view}"]`)
-			routeChainToLoad = this.route.parentChain.slice(index).concat(this.route)
-		} else if (this.baseView) {
-			container = document.querySelector(`router-outlet[owner="${this.baseView}"]`)
-			routeChainToLoad = this.route.parentChain.concat(this.route)
-		}
+		const params = new URLSearchParams()
 
-		if (!(container && routeChainToLoad)) {
-			// console.log('Ooops, dont know where to put view')
-			throw new Error('Can not render')
+		params.set('query', this.query.toString())
+		params.set('params', JSON.stringify(this.params))
+		params.append('parent', outlet.owner)
 
-		}
-		const viewHtml = await Promise.all(routeChainToLoad.map(route => this.#loadViewFile(route.view)))
 
-		const transition = document.startViewTransition(() => {
+		const response = await fetch(`/_ff-router/view/${this.route.path}?${params}`)
 
-			container.innerHTML = ''
+		/** @type {{view: string, data: unknown}} */
+		const { view, data } = await response.json()
 
-			container.toggleAttribute('dynamic', true)
-			const template = document.createElement('template')
-			/** @type {Element?} */
-			let nextOutlet = container
-			viewHtml.forEach((view, index) => {
-				template.innerHTML = view
-				let routerOutlet = null
-				if (index < viewHtml.length - 1) {
-					routerOutlet = template.content.querySelector('router-outlet')
-
-					routerOutlet?.setAttribute('owner', routeChainToLoad[index].view)
-					routerOutlet?.toggleAttribute('dynamic', true)
-				}
-				nextOutlet?.appendChild(template.content)
-				nextOutlet = routerOutlet
-			})
-		})
-
-		await transition.finished
+		this.setData(data)
+		outlet.innerHTML = view
 	}
 
 
@@ -102,6 +85,8 @@ export class Router extends BaseRouter {
 		})
 
 		navigation.updateCurrentEntry({ state: initialData })
+
+		register(this)
 
 		// seedStore(this.store, initialData.store)
 		navigation.addEventListener('navigate', (event) => {
@@ -141,7 +126,7 @@ export class Router extends BaseRouter {
 						return
 					}
 
-					await this.loadView(previousRoute)
+					await this.loadView()
 				}
 			})
 		})
