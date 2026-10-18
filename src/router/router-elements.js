@@ -14,6 +14,11 @@ export class RouteIslandContainer extends HTMLElement {
 	/** @type {ElementInternals} */
 	#internals
 
+
+	get isHydrated() {
+		return this.#internals.states.has('hydrated')
+	}
+
 	constructor() {
 		super()
 		this.#internals = this.attachInternals()
@@ -31,8 +36,13 @@ export class RouteIslandContainer extends HTMLElement {
 	}
 
 	disconnectedCallback() {
-		// Should it really unmount
-		this.#island?.unmount()
+		this.#island?.unmount(true)
+	}
+
+	connectedCallback() {
+		if (this.isHydrated) {
+			this.#island?.mount(this)
+		}
 	}
 
 	/**
@@ -48,10 +58,6 @@ export class RouteIslandContainer extends HTMLElement {
 
 		island.hydrate(this)
 		this.#internals.states.add('hydrated')
-
-		console.log(this.#internals.states, this.matches('route-island:state(hydrated)'))
-
-
 	}
 }
 

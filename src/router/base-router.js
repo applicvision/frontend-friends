@@ -164,21 +164,19 @@ export class BaseRouter {
 	 * @param {() => void} syncCallback
 	 */
 	setDataForRendering(route, data, params, query, syncCallback) {
-		this.#activeRouteData = data
+		this.#activeRoute = route
+		this.setData(data)
 		this.#activeParams = params
 		this.#activeQuery = query
-		this.#activeRoute = route
 
-		if (data) {
-			route.store?.insert(data)
-		}
 		try {
 			syncCallback()
 		} finally {
+			this.route?.store?.clear()
 			this.#activeRouteData = null
-			route.store?.clear()
 			this.#activeParams = {}
 			this.#activeQuery = new URLSearchParams()
+			this.#activeRoute = null
 		}
 	}
 
@@ -186,9 +184,11 @@ export class BaseRouter {
 	 * @protected
 	 * @param {unknown} data
 	 */
-	setData(data) {
+	setData(data, { skipStore = false } = {}) {
 		this.#activeRouteData = data
-		// autoSubscribers.forEach(subscriber => subscriber.routeChanged())
+		if (!skipStore) {
+			this.route?.store?.upsert(data)
+		}
 	}
 
 	#activeQuery = new URLSearchParams()
@@ -209,6 +209,8 @@ export class BaseRouter {
 		this.#basePath = basePath
 		this.#addChildRoutes(rootRoute, children)
 		this.routes = rootRoute.routeList
+
+		this.routeMap = Object.fromEntries(this.routes.map(route => [route.path, route]))
 	}
 
 	/**
@@ -291,7 +293,7 @@ export class BaseRouter {
 			this.#activeRoute = match.route
 			this.route?.store?.insert(storeData)
 			this.#activeParams = match.params
-			this.#activeRouteData = routeData
+			this.setData(routeData)
 		}
 	}
 

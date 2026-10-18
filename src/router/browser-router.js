@@ -7,22 +7,6 @@ import { FFOutlet, register } from './router-elements.js'
 
 export class Router extends BaseRouter {
 
-	/** @type {{[key: string]: string}} */
-	#viewCache = {}
-
-	/**
-	 * @param {string} view
-	 */
-	async #loadViewFile(view) {
-		if (!this.#viewCache[view]) {
-			const path = `__route-view/${view}`
-			const response = await fetch(path)
-
-			this.#viewCache[view] = await response.text()
-		}
-		return this.#viewCache[view]
-	}
-
 	/** @type {Record<string, FFOutlet>} */
 	#outlets = {}
 
@@ -37,10 +21,10 @@ export class Router extends BaseRouter {
 		delete this.#outlets[outlet.owner]
 	}
 
-	async loadView() {
+	/** @param {NavigationHistoryEntry?} leavingEntry */
+	async #load(leavingEntry) {
 
 		if (!this.route) throw new Error('Can not load view because there is no current route')
-
 
 		/** @type {FFOutlet|null} */
 		let outlet = null
@@ -59,15 +43,30 @@ export class Router extends BaseRouter {
 		params.set('params', JSON.stringify(this.params))
 		params.append('parent', outlet.owner)
 
-
 		const response = await fetch(`/_ff-router/view/${this.route.path}?${params}`)
 
 		/** @type {{view: string, data: unknown}} */
 		const { view, data } = await response.json()
 
+		if (leavingEntry) {
+			const range = document.createRange()
+			range.selectNodeContents(outlet)
+			this.#cache.set(leavingEntry.id, {
+				fragment: range.extractContents(),
+				outlet,
+				data: this.routeData
+			})
+			leavingEntry.addEventListener('dispose', () => {
+				this.#cache.delete(leavingEntry.id)
+			}, { once: true })
+		}
+
 		this.setData(data)
 		outlet.innerHTML = view
 	}
+
+	/** @type {Map<string, {fragment:DocumentFragment, data: unknown, outlet: FFOutlet}>} */
+	#cache = new Map()
 
 
 	async mount(options = {}) {
@@ -88,7 +87,6 @@ export class Router extends BaseRouter {
 
 		register(this)
 
-		// seedStore(this.store, initialData.store)
 		navigation.addEventListener('navigate', (event) => {
 
 			if (
@@ -108,25 +106,53 @@ export class Router extends BaseRouter {
 			const isTraversal = event.navigationType == 'traverse'
 			const lastState = event.destination.getState()
 
+			const leavingEntry = navigation.currentEntry
+
 			event.intercept({
 				handler: async () => {
-					if (isTraversal && lastState) {
-						// TODO: handle page change too
-						this.setData(lastState)
-						this.notifySubscribers()
-						return
+					if (isTraversal) {
+						const cached = this.#cache.get(event.destination.id)
+						if (cached && cached.outlet.isConnected) {
+
+							if (this.route == previousRoute) {
+								this.setData(cached.data)
+							} else {
+								const range = document.createRange()
+								range.selectNodeContents(cached.outlet)
+								const fragment = range.extractContents()
+								if (leavingEntry) {
+									this.#cache.set(leavingEntry.id, {
+										fragment,
+										// TODO: not sure this is the right outlet
+										outlet: cached.outlet,
+										data: this.routeData
+									})
+								}
+								// Do not set stale data to the store.
+								// It might have been written to later.
+								this.setData(cached.data, { skipStore: true })
+								cached.outlet.appendChild(cached.fragment)
+							}
+							this.#cache.delete(event.destination.id)
+							this.notifySubscribers()
+							return
+						}
 					}
 
 					if (previousRoute == this.route) {
+						console.log('handling same route navigation')
 						const data = await this.loadRoute()
-						this.route?.store?.insert(data)
 						this.setData(data)
 						navigation.updateCurrentEntry({ state: data })
 						this.notifySubscribers()
 						return
 					}
 
-					await this.loadView()
+					try {
+						await this.#load(leavingEntry)
+					} catch (err) {
+						console.log(err)
+					}
 				}
 			})
 		})

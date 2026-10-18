@@ -90,9 +90,9 @@ async function contentHeaders(filePath) {
 
 
 
-const islandContainerRegex = /<ff-island src="(?<islandSrc>[^"]+)">(?<islandContent>.*?)<\/ff-island>/sdg
+const islandContainerRegex = /(<ff-island src=")(?<islandSrc>[^"]+)(">(?<islandContent>.*?)<\/ff-island>)/sdg
 
-const routerScriptTag = /<ff-router src="(?<src>[^"]+)"><\/ff-router>/
+const routerScriptTagRegex = /(<ff-router src=")(?<src>[^"]+)("><\/ff-router>)/
 
 export class Router extends BaseRouter {
 
@@ -125,23 +125,23 @@ export class Router extends BaseRouter {
 		const fileDirectory = path.dirname(resolvedFilePath)
 
 		return view
-			.replace(routerScriptTag, (match, src) => {
+			.replace(routerScriptTagRegex, (match, prefix, src, tail) => {
 				if (src.startsWith('/')) {
 					return match
 				}
 				const rewrittenSrc = path.join(fileDirectory, src)
-				const startIndex = '<ff-router src="'.length
 
-				return match.slice(0, startIndex) + rewrittenSrc + match.slice(startIndex + src.length)
+				return prefix + rewrittenSrc + tail
 			})
-			.replaceAll(islandContainerRegex, (match, src) => {
+			.replaceAll(islandContainerRegex, (match, prefix, src, tail) => {
 				if (src.startsWith('/')) {
 					return match
 				}
+
 				const rewrittenSrc = path.join(fileDirectory, src)
 
-				const startIndex = '<ff-island src="'.length
-				return match.slice(0, startIndex) + rewrittenSrc + match.slice(startIndex + src.length)
+				// const startIndex = '<ff-island src="'.length
+				return prefix + rewrittenSrc + tail
 			})
 	}
 
@@ -193,10 +193,9 @@ export class Router extends BaseRouter {
 
 	/**
 	* @param {ServerResponse} response
-	* @param {string|undefined} filePath
+	* @param {string} filePath
 	*/
 	async respondWithResource(response, filePath) {
-		if (!filePath) return response.writeHead(404).end()
 		if (path.relative(this.#fileDirectory, filePath).startsWith('..')) {
 			return response.writeHead(403).end('No access')
 		}
@@ -266,10 +265,7 @@ export class Router extends BaseRouter {
 				if (internalApiMatch) {
 					const { type, [0]: resource } = internalApiMatch.pathname.groups
 
-					console.log('INCOMING REQUEST', { type, resource })
-
-					// temp delay
-					await new Promise(res => setTimeout(res, 200))
+					if (resource == null) return response.writeHead(400).end()
 
 					if (type == 'view') {
 						const searchParams = new URLSearchParams(internalApiMatch.search.input)
@@ -277,35 +273,27 @@ export class Router extends BaseRouter {
 						const query = new URLSearchParams(searchParams.get('query') || undefined)
 						const params = JSON.parse(searchParams.get('params') || '')
 
-						// TODO: let base router make a map between path and route instead 
-						const route = this.routes.find(route => route.path == resource)
+						const route = this.routeMap[resource]
 
 						if (!route) return response.writeHead(404).end('No route found')
 
-						const stopAtRoute = parent != null ? this.routes.find(route => route.path == parent) : undefined
+						const stopAtRoute = parent != null ? this.routeMap[parent] : undefined
 
-						let responseHtml = await this.loadView(route, stopAtRoute)
-						const routeData = await this.loadRoute({ route, params, query }, request)
-						const islands = await this.#dynamicIslands(responseHtml)
-						if (islands.length > 0) {
-							this.setDataForRendering(route, routeData, params, query, () => {
+						const [viewHtml, data] = await Promise.all([
+							this.loadView(route, stopAtRoute),
+							this.loadRoute({ route, params, query }, request)
+						])
 
-								responseHtml = islands.reduceRight((view, { island, start, end }) => {
-									return view.slice(0, start) +
-										island.hydratable +
-										view.slice(end)
-								}, responseHtml)
-							})
-						}
+						const responseHtml = await this.#injectDynamicContent(viewHtml, { route, params, query, data })
 
-						const data = {
+						const responseObject = {
 							view: responseHtml,
-							data: routeData
+							data
 						}
 
 						return response
 							.writeHead(200, { 'content-type': 'application/json' })
-							.end(JSON.stringify(data))
+							.end(JSON.stringify(responseObject))
 					}
 
 					return this.respondWithResource(response, resource)
@@ -318,30 +306,11 @@ export class Router extends BaseRouter {
 				}
 
 				try {
-					let responseHtml = await this.loadView(routeMatch.route)
-					const routeData = await this.loadRoute(routeMatch, request)
-					const islands = await this.#dynamicIslands(responseHtml)
-					if (islands.length > 0) {
-						this.setDataForRendering(routeMatch.route, routeData, routeMatch.params, routeMatch.query, () => {
+					const [pageHtml, routeData] = await Promise.all([this.loadView(routeMatch.route), this.loadRoute(routeMatch, request)])
 
-							responseHtml = islands.reduceRight((view, { island, start, end }) => {
-								return view.slice(0, start) +
-									island.hydratable +
-									view.slice(end)
-							}, responseHtml)
-								.replace(routerScriptTag,
-									(_, routerSrc) => this.#clientRouterScriptWithData(routerSrc)
-								)
-						})
-					} else {
-						responseHtml = responseHtml.replace(routerScriptTag,
-							(_, routerSrc) => clientRouterScript(this.basePath, routerSrc)
-						)
-					}
+					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, ...routeMatch }, true)
 
-
-					response.writeHead(200, { 'content-type': 'text/html' })
-					response.end(responseHtml)
+					response.writeHead(200, { 'content-type': 'text/html' }).end(responseHtml)
 				} catch (err) {
 					const error = /** @type {Error} */(err)
 					response.writeHead(500)
@@ -351,10 +320,40 @@ export class Router extends BaseRouter {
 		}
 	}
 
+	/**
+	 * @param {string} html
+	 * @param {{route: Route, data: unknown, params: Record<string, string>, query: URLSearchParams}} state
+	 */
+	async #injectDynamicContent(html, { route, data, params, query }, isFullRequest = false) {
+		const islands = await this.#dynamicIslandsIn(html)
+		if (islands.length > 0) {
+			this.setDataForRendering(route, data, params, query, () => {
+
+				html = islands.reduceRight((view, { island, start, end }) => {
+					return view.slice(0, start) +
+						island.hydratable +
+						view.slice(end)
+				}, html)
+				if (isFullRequest) {
+					html = html.replace(routerScriptTagRegex,
+						(_, __, routerSrc) => this.#clientRouterScriptWithData(routerSrc)
+					)
+				}
+			})
+			return html
+		}
+		if (isFullRequest) {
+			return html.replace(routerScriptTagRegex,
+				(_, __, routerSrc) => clientRouterScript(this.basePath, routerSrc)
+			)
+		}
+		return html
+	}
+
 	/** 
 	* @param {string} htmlString
 	*/
-	async #dynamicIslands(htmlString) {
+	async #dynamicIslandsIn(htmlString) {
 		const foundIslands = htmlString.matchAll(islandContainerRegex)
 
 		/** @type {{src: string, start: number, end: number}[]} */
