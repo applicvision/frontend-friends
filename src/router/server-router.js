@@ -175,7 +175,7 @@ export class Router extends BaseRouter {
 					return fileContent
 						.replace(/<ff-outlet>.*?<\/ff-outlet>/,
 							html`
-						<ff-outlet owner="${route.fullPath}">
+						<ff-outlet owner="${route.path}">
 							<!-- ff-outlet-content -->
 						</ff-outlet>`.staticHtmlString
 						)
@@ -250,17 +250,19 @@ export class Router extends BaseRouter {
 	/** @type {Server?} */
 	#server = null
 	/**
-	* @param {{directory?: string}} [options]
+	* @param {{directory?: string, base?: string}} [options]
 	* @return {(request: IncomingMessage, response: ServerResponse, server: Server) => Promise<unknown>}
 	*/
 	mount(options) {
+		super.mount(options)
 
 		const routerPattern = new URLPattern({ pathname: `${this.basePath}/_ff-router/:type(resource|view)/*` })
 
 		this.#fileDirectory = options?.directory ?? '.'
 		return async (request, response, server) => {
 			this.#server ??= server
-			if (request.url?.startsWith(this.basePath)) {
+
+			if (request.url == this.basePath || request.url?.startsWith(`${this.basePath}/`)) {
 				const internalApiMatch = routerPattern.exec(request.url)
 				if (internalApiMatch) {
 					const { type, [0]: resource } = internalApiMatch.pathname.groups
@@ -298,6 +300,8 @@ export class Router extends BaseRouter {
 
 					return this.respondWithResource(response, resource)
 				}
+
+				console.log('incoming', request.url, { base: this.basePath })
 
 				const routeMatch = this.resolve(request.url)
 
@@ -414,7 +418,7 @@ function clientRouterScript(base, routerSrc) {
 	return `
 	<script type="module">
 		import {router} from '${routerPath}'
-		router.mount()
+		router.mount({base: '${base}'})
 	</script>`.trim()
 }
 

@@ -107,37 +107,6 @@ export class Route {
 		}
 		return []
 	}
-
-	/** @type {string} */
-	get fullPath() {
-		if (this.parent) {
-			return this.parent.fullPath + '/' + this.path
-		}
-		return this.path
-	}
-
-	/**
-	 * @param {string[]} pathParts
-	 **/
-	match(pathParts) {
-
-		if (this.pathParts.length != pathParts.length) return null
-
-
-		/** @type {Record<string, string>} */
-		const params = {}
-		for (let index = 0; index < pathParts.length; index += 1) {
-			const routePart = this.pathParts[index]
-			const actualPathPart = pathParts[index]
-			if (routePart.type == 'constant' && routePart.value != actualPathPart) {
-				return null
-			}
-			if (routePart.type == 'param') {
-				params[routePart.name] = actualPathPart
-			}
-		}
-		return { params }
-	}
 }
 
 export class BaseRouter {
@@ -199,18 +168,23 @@ export class BaseRouter {
 	#basePath = ''
 	get basePath() { return this.#basePath }
 
-	/**
-	 * @param {string} basePath
-	 * @param {RouteConfig} config
-	 */
-	constructor(basePath, config) {
+	/** @param {RouteConfig} config */
+	constructor(config) {
 		const { layout, view, load, children, store } = config
-		const rootRoute = new Route(basePath, layout, view, load, store)
-		this.#basePath = basePath
+		const rootRoute = new Route('', layout, view, load, store)
 		this.#addChildRoutes(rootRoute, children)
 		this.routes = rootRoute.routeList
 
 		this.routeMap = Object.fromEntries(this.routes.map(route => [route.path, route]))
+
+	}
+
+	/** @type {Map<Route, URLPattern>|null} */
+	#_routePatterns = null
+	get #routePatterns() {
+		return this.#_routePatterns ??= new Map(this.routes.map(route => [
+			route, new URLPattern({ pathname: `${this.basePath}/${route.path}{/}?` })
+		]))
 	}
 
 	/**
@@ -226,7 +200,10 @@ export class BaseRouter {
 		}
 	}
 
-	/** @param {URL} url */
+	/**
+	 * @protected
+	 * @param {URL} url 
+	 **/
 	resolveAndUpdate(url) {
 		const resolved = this.resolve(url)
 
@@ -238,26 +215,21 @@ export class BaseRouter {
 
 	/** @param {string|URL} pathOrUrl */
 	resolve(pathOrUrl) {
-		let path = '', query = null
 
-		if (typeof pathOrUrl == 'string') {
-			const parts = pathOrUrl.split('?')
-			path = parts[0]
-			query = new URLSearchParams(parts[1])
-		} else {
-			path = pathOrUrl.pathname
-			query = pathOrUrl.searchParams
-		}
+		const matchWith = pathOrUrl instanceof URL ? pathOrUrl : new URL(pathOrUrl, 'https://frontend-friends.applicvision.com')
 
-		const parts = path.split('/').filter(Boolean)
+		for (const [route, pattern] of this.#routePatterns) {
 
-		for (const route of this.routes) {
-			const match = route.match(parts)
+			const match = pattern.exec(matchWith)
+
 			if (match) {
+
+				// For now, optional params are not permitted. Maybe in the future...
+				const params = /** @type {Record<string, string>} */ (match.pathname.groups)
 				return {
 					route,
-					params: match.params,
-					query
+					params,
+					query: new URLSearchParams(match.search.input)
 				}
 			}
 		}
@@ -281,13 +253,18 @@ export class BaseRouter {
 	}
 
 	/**
-	 * @param {{directory?: string, client?: {path: string, storeData?: unknown, routeData?: unknown }}} arg
+	 * @param {{directory?: string, base?: string, client?: {path: string, storeData?: unknown, routeData?: unknown }}} options
 	 */
-	mount(arg) {
-		if (arg.client) {
-			const { path, routeData, storeData } = arg.client
+	mount(options = {}) {
+		const baseParts = options.base?.split('/').filter(Boolean)
+		if (baseParts?.length) {
+			this.#basePath = `/${baseParts.join('/')}`
+		}
+		if (options.client) {
+			const { path, routeData, storeData } = options.client
 
 			const match = this.resolve(path)
+			console.log('client path', path)
 			if (!match) throw new Error(`Route could not be mounted at location: ${path}`)
 
 			this.#activeRoute = match.route
@@ -320,7 +297,7 @@ export class BaseRouter {
 	 * @param {string} path 
 	 * @param {Record<string, string>} params
 	 **/
-	linkTo(path, params) {
+	linkTo(path, params = {}) {
 		return Object.entries(params)
 			.reduce((path, [pathParam, value]) => path.replace(`:${pathParam}`, value), `${this.basePath}/${path}`)
 	}
@@ -369,18 +346,9 @@ export class BaseRouter {
 
 	static Route = Route
 
-	/**
-	 * @param {string|object} baseOrConfig
-	 * @param {object} [config]
-	 */
-	static create(baseOrConfig, config) {
-		if (typeof baseOrConfig == 'string') {
-			if (typeof config == 'object') {
-				return new this(baseOrConfig, config)
-			}
-			throw new Error('Missing config')
-		}
-		return new this('', baseOrConfig)
+	/** @param {object} config */
+	static create(config) {
+		return new this(config)
 	}
 }
 

@@ -52,7 +52,7 @@ export class RouteIslandContainer extends HTMLElement {
 
 		// TODO: fix basepath
 		/** @type {{default: DynamicIsland<any>}} */
-		const { default: island } = await import(`/_ff-router/resource/${islandSrc}`)
+		const { default: island } = await import(`${router?.basePath ?? ''}/_ff-router/resource/${islandSrc}`)
 
 		this.#island = island
 

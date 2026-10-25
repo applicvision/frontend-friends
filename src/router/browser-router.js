@@ -43,7 +43,7 @@ export class Router extends BaseRouter {
 		params.set('params', JSON.stringify(this.params))
 		params.append('parent', outlet.owner)
 
-		const response = await fetch(`/_ff-router/view/${this.route.path}?${params}`)
+		const response = await fetch(`${this.basePath}/_ff-router/view/${this.route.path}?${params}`)
 
 		/** @type {{view: string, data: unknown}} */
 		const { view, data } = await response.json()
@@ -69,6 +69,7 @@ export class Router extends BaseRouter {
 	#cache = new Map()
 
 
+	/** @param {{base?: string}|undefined} options */
 	async mount(options = {}) {
 		const dataTransfer = document.getElementById('ff-router-data')?.textContent
 
@@ -76,6 +77,7 @@ export class Router extends BaseRouter {
 		const initialData = dataTransfer ? JSON.parse(dataTransfer) : null
 
 		super.mount({
+			...options,
 			client: {
 				path: location.pathname + location.search,
 				storeData: initialData?.store,
