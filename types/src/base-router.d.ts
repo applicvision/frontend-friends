@@ -15,6 +15,10 @@ export class BaseRouter<Routes> {
 
 	get query(): URLSearchParams
 
+	get basePath(): string
+
+	get isMounted(): boolean
+
 	static create<Spec extends RouterSpec<Spec>>(config: Spec): BaseRouter<AllRoutes<Spec>>
 }
 

@@ -79,7 +79,7 @@ export class Router extends BaseRouter {
 		super.mount({
 			...options,
 			client: {
-				path: location.pathname + location.search,
+				path: location.href,
 				storeData: initialData?.store,
 				routeData: initialData?.data
 			}

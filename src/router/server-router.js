@@ -301,8 +301,6 @@ export class Router extends BaseRouter {
 					return this.respondWithResource(response, resource)
 				}
 
-				console.log('incoming', request.url, { base: this.basePath })
-
 				const routeMatch = this.resolve(request.url)
 
 				if (!routeMatch) {

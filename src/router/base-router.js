@@ -23,6 +23,14 @@ export async function getJSON(responseShape, input, init) {
 	return parse(responseShape, rawResponse)
 }
 
+/**  @param {string[]} pathParts */
+function normalizedPath(...pathParts) {
+	return '/' + pathParts
+		.flatMap(part => part.split('/'))
+		.filter(Boolean)
+		.join('/')
+}
+
 
 export class Route {
 
@@ -43,22 +51,15 @@ export class Route {
 	 * @param {AnyStore} [store]
 	 */
 	constructor(path, layout, view, load, store) {
-		this.path = path
 		if (path.includes(' ')) throw new Error('Path can not contain spaces')
 
+		if (!layout && !view && !load) throw new Error(`Empty route: ${path}`)
+
+		this.path = path
 		this.view = view
 		this.layout = layout
 		this.loadData = load
 		this.store = store ?? null
-
-		if (!layout && !view && !load) throw new Error(`Empty route: ${path}`)
-
-		/** @type {({type: 'constant', value: string} | {type: 'param', name: string})[]} */
-		this.pathParts = path.split('/').filter((part) => part.length > 0).map(part =>
-			part.startsWith(':') ?
-				{ type: 'param', name: part.slice(1) } :
-				{ type: 'constant', value: part }
-		)
 	}
 
 	/**
@@ -96,16 +97,6 @@ export class Route {
 	 */
 	async load(get, params, query) {
 		return this.loadData?.(get, params, query)
-	}
-
-	/**
-	 * @type {Route[]}
-	 */
-	get parentChain() {
-		if (this.parent) {
-			return [this.parent.parentChain, this.parent].flat()
-		}
-		return []
 	}
 }
 
@@ -180,12 +171,7 @@ export class BaseRouter {
 	}
 
 	/** @type {Map<Route, URLPattern>|null} */
-	#_routePatterns = null
-	get #routePatterns() {
-		return this.#_routePatterns ??= new Map(this.routes.map(route => [
-			route, new URLPattern({ pathname: `${this.basePath}/${route.path}{/}?` })
-		]))
-	}
+	#routePatterns = null
 
 	/**
 	 * @param {Route} route
@@ -213,14 +199,16 @@ export class BaseRouter {
 		this.#activeQuery = resolved?.query ?? new URLSearchParams()
 	}
 
-	/** @param {string|URL} pathOrUrl */
+	/**
+	 * @protected
+	 * @param {string|URL} pathOrUrl 
+	 **/
 	resolve(pathOrUrl) {
+		const patterns = this.#routePatterns
+		if (!patterns) throw new Error('Router not mounted')
 
-		const matchWith = pathOrUrl instanceof URL ? pathOrUrl : new URL(pathOrUrl, 'https://frontend-friends.applicvision.com')
-
-		for (const [route, pattern] of this.#routePatterns) {
-
-			const match = pattern.exec(matchWith)
+		for (const [route, pattern] of patterns) {
+			const match = pattern.exec(pathOrUrl)
 
 			if (match) {
 
@@ -252,19 +240,22 @@ export class BaseRouter {
 		return getJSON(responseShape, input, init)
 	}
 
+	get isMounted() { return this.#routePatterns != null }
+
 	/**
 	 * @param {{directory?: string, base?: string, client?: {path: string, storeData?: unknown, routeData?: unknown }}} options
 	 */
 	mount(options = {}) {
-		const baseParts = options.base?.split('/').filter(Boolean)
-		if (baseParts?.length) {
-			this.#basePath = `/${baseParts.join('/')}`
+		if (options.base) {
+			this.#basePath = normalizedPath(options.base)
 		}
+		this.#routePatterns = new Map(this.routes.map(route => [
+			route, new URLPattern({ pathname: normalizedPath(this.basePath, route.path) + '{/}?' })
+		]))
 		if (options.client) {
 			const { path, routeData, storeData } = options.client
 
 			const match = this.resolve(path)
-			console.log('client path', path)
 			if (!match) throw new Error(`Route could not be mounted at location: ${path}`)
 
 			this.#activeRoute = match.route
@@ -298,8 +289,12 @@ export class BaseRouter {
 	 * @param {Record<string, string>} params
 	 **/
 	linkTo(path, params = {}) {
+		if (!this.isMounted) throw new Error('Router is not mounted')
 		return Object.entries(params)
-			.reduce((path, [pathParam, value]) => path.replace(`:${pathParam}`, value), `${this.basePath}/${path}`)
+			.reduce(
+				(path, [pathParam, value]) => path.replace(`:${pathParam}`, value),
+				normalizedPath(this.basePath, path)
+			)
 	}
 
 	/** @type {Set<RouteSubscriber>} */
