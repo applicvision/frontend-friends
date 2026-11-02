@@ -21,8 +21,11 @@ export class Router extends BaseRouter {
 		delete this.#outlets[outlet.owner]
 	}
 
-	/** @param {NavigationHistoryEntry?} leavingEntry */
-	async #load(leavingEntry) {
+	/**
+	 * @param {NavigationHistoryEntry?} leavingEntry 
+	 * @param {AbortSignal} signal
+	 **/
+	async #load(leavingEntry, signal) {
 
 		if (!this.route) throw new Error('Can not load view because there is no current route')
 
@@ -43,49 +46,82 @@ export class Router extends BaseRouter {
 		params.set('params', JSON.stringify(this.params))
 		params.append('parent', outlet.owner)
 
-		const response = await fetch(`${this.basePath}/_ff-router/view/${this.route.path}?${params}`)
+		const response = await fetch(`${this.basePath}/_ff-router/view/${this.route.path}?${params}`, { signal })
 
 		/** @type {{view: string, data: unknown}} */
 		const { view, data } = await response.json()
 
-		if (leavingEntry) {
-			const range = document.createRange()
-			range.selectNodeContents(outlet)
-			this.#cache.set(leavingEntry.id, {
-				fragment: range.extractContents(),
-				outlet,
-				data: this.routeData
-			})
-			leavingEntry.addEventListener('dispose', () => {
-				this.#cache.delete(leavingEntry.id)
-			}, { once: true })
-		}
+		this.#clearOutlet(outlet, leavingEntry)
 
 		this.setData(data)
 		outlet.innerHTML = view
 	}
 
-	/** @type {Map<string, {fragment:DocumentFragment, data: unknown, outlet: FFOutlet}>} */
-	#cache = new Map()
+	/**
+	 * 
+	 * @param {unknown} data
+	 * @param {{ skipStore?: boolean }} [options]
+	 */
+	setData(data, options) {
+		super.setData(data, options)
+		const { currentEntry } = navigation
+		if (currentEntry && !this.#dataCache.has(currentEntry.id)) {
+			this.#dataCache.set(currentEntry.id, data)
+			currentEntry.addEventListener('dispose', () => this.#dataCache.delete(currentEntry.id))
+		}
+		this.notifySubscribers()
+	}
+
+	/** @type {Map<string, {fragment:DocumentFragment, outlet: FFOutlet}>} */
+	#domCache = new Map()
+
+	/** @type {Map<string, unknown>} */
+	#dataCache = new Map()
+
+	/**
+	 * @param {FFOutlet} outlet
+	 * @param {NavigationHistoryEntry?} entry
+	 */
+	#clearOutlet(outlet, entry) {
+		const range = document.createRange()
+		range.selectNodeContents(outlet)
+		const fragment = range.extractContents()
+		if (entry) {
+			this.#domCache.set(entry.id, { fragment, outlet })
+			entry.addEventListener('dispose', () => this.#domCache.delete(entry.id), { once: true })
+		}
+	}
+
+	/** @param {NavigateEvent} event */
+	async #loadRouteData(event) {
+		const cachedData = this.#dataCache.get(event.destination.id)
+		if (cachedData) {
+			console.log('using cache')
+			// Do not set stale data to the store.
+			// It might have been written to later.
+			this.setData(cachedData, { skipStore: true })
+		} else {
+			const data = await this.loadRoute()
+			if (event.signal.aborted) return
+			this.setData(data)
+		}
+	}
 
 
 	/** @param {{base?: string}|undefined} options */
 	async mount(options = {}) {
 		const dataTransfer = document.getElementById('ff-router-data')?.textContent
 
-		/** @type {{data?: unknown, store?: unknown} | null} */
+		/** @type {{data?: unknown} | null} */
 		const initialData = dataTransfer ? JSON.parse(dataTransfer) : null
 
 		super.mount({
 			...options,
 			client: {
 				path: location.href,
-				storeData: initialData?.store,
-				routeData: initialData?.data
+				data: initialData?.data
 			}
 		})
-
-		navigation.updateCurrentEntry({ state: initialData })
 
 		register(this)
 
@@ -105,53 +141,31 @@ export class Router extends BaseRouter {
 
 			if (!this.route) return
 
-			const isTraversal = event.navigationType == 'traverse'
-			const lastState = event.destination.getState()
-
 			const leavingEntry = navigation.currentEntry
 
 			event.intercept({
 				handler: async () => {
-					if (isTraversal) {
-						const cached = this.#cache.get(event.destination.id)
-						if (cached && cached.outlet.isConnected) {
 
-							if (this.route == previousRoute) {
-								this.setData(cached.data)
-							} else {
-								const range = document.createRange()
-								range.selectNodeContents(cached.outlet)
-								const fragment = range.extractContents()
-								if (leavingEntry) {
-									this.#cache.set(leavingEntry.id, {
-										fragment,
-										// TODO: not sure this is the right outlet
-										outlet: cached.outlet,
-										data: this.routeData
-									})
-								}
-								// Do not set stale data to the store.
-								// It might have been written to later.
-								this.setData(cached.data, { skipStore: true })
-								cached.outlet.appendChild(cached.fragment)
-							}
-							this.#cache.delete(event.destination.id)
-							this.notifySubscribers()
-							return
-						}
+					// Same route navigation
+					if (previousRoute == this.route) {
+						console.log('handling same route nav')
+						await this.#loadRouteData(event)
+						return
 					}
 
-					if (previousRoute == this.route) {
-						console.log('handling same route navigation')
-						const data = await this.loadRoute()
-						this.setData(data)
-						navigation.updateCurrentEntry({ state: data })
-						this.notifySubscribers()
+					const cachedDom = this.#domCache.get(event.destination.id)
+
+					if (cachedDom && cachedDom.outlet.isConnected) {
+						const { fragment, outlet } = cachedDom
+						this.#clearOutlet(outlet, leavingEntry)
+						await this.#loadRouteData(event)
+						outlet.appendChild(fragment)
+						this.#domCache.delete(event.destination.id)
 						return
 					}
 
 					try {
-						await this.#load(leavingEntry)
+						await this.#load(leavingEntry, event.signal)
 					} catch (err) {
 						console.log(err)
 					}

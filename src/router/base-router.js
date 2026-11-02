@@ -146,7 +146,7 @@ export class BaseRouter {
 	 */
 	setData(data, { skipStore = false } = {}) {
 		this.#activeRouteData = data
-		if (!skipStore) {
+		if (!skipStore && data) {
 			this.route?.store?.upsert(data)
 		}
 	}
@@ -243,7 +243,7 @@ export class BaseRouter {
 	get isMounted() { return this.#routePatterns != null }
 
 	/**
-	 * @param {{directory?: string, base?: string, client?: {path: string, storeData?: unknown, routeData?: unknown }}} options
+	 * @param {{directory?: string, base?: string, client?: {path: string, data?: unknown }}} options
 	 */
 	mount(options = {}) {
 		if (options.base) {
@@ -253,15 +253,14 @@ export class BaseRouter {
 			route, new URLPattern({ pathname: normalizedPath(this.basePath, route.path) + '{/}?' })
 		]))
 		if (options.client) {
-			const { path, routeData, storeData } = options.client
+			const { path, data } = options.client
 
 			const match = this.resolve(path)
 			if (!match) throw new Error(`Route could not be mounted at location: ${path}`)
 
 			this.#activeRoute = match.route
-			this.route?.store?.insert(storeData)
 			this.#activeParams = match.params
-			this.setData(routeData)
+			this.setData(data)
 		}
 	}
 

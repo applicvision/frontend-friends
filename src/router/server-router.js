@@ -391,10 +391,8 @@ export class Router extends BaseRouter {
 	/** @param {string} routerSrc */
 	#clientRouterScriptWithData(routerSrc) {
 
-		const routeData = JSON.stringify({
-			data: this.routeData,
-			store: this.route?.store?.getAll()
-		}, null, 2).replace(/</g, '\\u003c')
+		const routeData = JSON.stringify({ data: this.routeData }, null, 2)
+			.replace(/</g, '\\u003c')
 
 		return `
 			<script id="ff-router-data" type="application/json">
