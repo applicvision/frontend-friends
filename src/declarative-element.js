@@ -1,9 +1,9 @@
 import { twoway, html } from '@applicvision/frontend-friends'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { storePlugin, routerPlugin, runWithPlugins } from './render-hooks.js'
+import { storePlugin, routerPlugin, runWithPlugins } from './plugin-helpers.js'
 
 /**
- * @import {TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass, FFPlugin, PluginFactory, PluginStateShape, PluginCreator} from '../types/type-utils.js'
+ * @import {FFPlugin, PluginFactory, PluginStateShape, TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass} from '../types/type-utils.js'
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
  * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
@@ -144,6 +144,11 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	connectedCallback() {
+		this.#plugins = Object.fromEntries(
+			Object.entries(this.#pluginCreators).map(([id, creator]) =>
+				[id, creator(this, this)]
+			)
+		)
 		this.#isRendering = true
 		this.#internalRender()
 		this.#isRendering = false
@@ -199,10 +204,11 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	 * @returns {T}
 	 */
 	usePlugin(pluginCreator) {
-		const plugin = pluginCreator(this, this)
-		const pluginId = Object.keys(this.#plugins).length
-		this.#plugins[pluginId] = plugin
-		return /** @type {T} */(plugin.state)
+		const pluginId = Object.keys(this.#pluginCreators).length
+		this.#pluginCreators[pluginId] = pluginCreator
+		return /** @type {T} */(new Proxy(Object.freeze({}), {
+			get: (_, key) => Reflect.get(this.#plugins[pluginId]?.state ?? {}, key)
+		}))
 	}
 
 	/** @type {Promise<any>|null} */
@@ -222,10 +228,6 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	componentDidUpdate() { }
 
-	storeChanged() {
-		this.invalidate()
-	}
-
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
 
@@ -237,9 +239,12 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	/** @type {Record<string, FFPlugin>} */
-	#plugins = {
-		store: storePlugin(this, this),
-		router: routerPlugin(this, this)
+	#plugins = {}
+
+	/** @type {Record<string, PluginFactory>} */
+	#pluginCreators = {
+		store: storePlugin,
+		router: routerPlugin
 	}
 
 	#isRendering = false

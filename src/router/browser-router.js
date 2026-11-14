@@ -13,7 +13,6 @@ export class Router extends BaseRouter {
 	/** @param {FFOutlet} outlet */
 	registerOutlet(outlet) {
 		this.#outlets[outlet.owner] = outlet
-		console.log('outlets', this.#outlets)
 	}
 
 	/** @param {FFOutlet} outlet */

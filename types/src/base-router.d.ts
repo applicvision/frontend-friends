@@ -26,7 +26,7 @@ export type AllRoutes<Spec> = Prettify<UnionToIntersection<FlattenSpec<Spec>>>
 
 type Children<T> = unknown extends T ? Record<string, unknown> : T extends { children?: infer C } ? NonNullable<C> : {}
 
-export type RouteSpec<T, Path extends string = ''> = {
+type RouteSpec<T, Path extends string = ''> = {
 	layout?: string
 	view?: string
 	store?: ResourceStore<any>,
@@ -45,7 +45,7 @@ type ChildrenSpec<T, ParentPath extends string = ''> = {
 	[K in keyof T]: RouteSpec<T[K], CurrentPath<ParentPath, K>>
 }
 
-type RouterSpec<T> = RouteSpec<T, ''>
+export type RouterSpec<T> = RouteSpec<T, ''>
 
 type ExtractParams<Path extends string> = Path extends `${infer Segment}/${infer Rest}` ?
 	(Segment extends `:${infer Param}` ? { [K in Param]: string } : {}) & ExtractParams<Rest>

@@ -3,9 +3,9 @@ import expect from '@applicvision/js-toolbox/expect'
 import { spy } from '@applicvision/js-toolbox/function-spy'
 import { html, css, DeclarativeElement } from '@applicvision/frontend-friends'
 import { innerCSS } from '@applicvision/frontend-friends/declarative-element'
-import { definePlugin } from '../src/render-hooks.js'
-import { BaseRouter, route } from '../src/router/base-router.js'
+import { definePlugin } from '../src/plugins.js'
 import { addTestContainer, shadowText } from './helpers.js'
+import { getStore } from '../src/store.js'
 
 
 /** @param {HTMLElement} element */
@@ -214,7 +214,7 @@ describe('Declarative Element component', () => {
 		const middlewareCalls = []
 		const cleanupSpy = spy()
 		/** @type {(val: string) => void} */
-		let triggerUpdate = () => {}
+		let triggerUpdate = () => { }
 
 		const customPlugin1 = definePlugin((invalidate) => {
 			const state = {
@@ -271,5 +271,119 @@ describe('Declarative Element component', () => {
 		// Test cleanup
 		testContainer.replaceChildren()
 		expect(cleanupSpy.calls).to.equal(1)
+	})
+
+	it('element connected to store', async () => {
+		const store = getStore({
+			/** @type {{id: string, name: string}} */
+			// @ts-ignore
+			user: undefined
+		})
+
+		store.user.upsert({ id: '1', name: 'Tina' })
+
+		class ConnectedElement extends DeclarativeElement {
+			static observedAttributes = ['user-id']
+			render() {
+				const userId = this.getAttribute('user-id')
+				if (!userId) return html`Error: no id`
+
+				const user = store.user.get(userId)
+
+				if (!user) return html`Error: no user`
+
+				return html`${user.name}`
+			}
+		}
+
+		customElements.define('connected-element', ConnectedElement)
+
+		const connected = new ConnectedElement
+
+		testContainer.replaceChildren(connected)
+
+		expect(shadowText(connected)).to.equal('Error: no id')
+
+		connected.setAttribute('user-id', '1')
+
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Tina')
+
+		store.user.update('1', { name: 'Tom' })
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Tom')
+
+		testContainer.replaceChildren()
+
+		store.user.update('1', { name: 'James' })
+
+		testContainer.replaceChildren(connected)
+
+		expect(shadowText(connected)).to.equal('James')
+
+		store.user.update('1', { name: 'Mandy' })
+
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Mandy')
+	})
+
+	it('plugin cleanup and reactivation', async () => {
+
+		let lastDetectedKey = ''
+
+		const lastKey = definePlugin((invalidate) => {
+
+			const state = { key: '' }
+
+			const abort = new AbortController()
+			document.addEventListener('keyup', (event) => {
+				state.key = lastDetectedKey = event.key
+				invalidate()
+			}, { signal: abort.signal })
+
+			return {
+				state,
+				cleanup: () => abort.abort()
+			}
+		})
+
+		class PluginUsingElement extends DeclarativeElement {
+			lastKeyState = this.usePlugin(lastKey)
+
+			render() {
+				return html`<div>${this.lastKeyState.key}</div>`
+			}
+		}
+
+		customElements.define('test-plugin-cleanup', PluginUsingElement)
+
+		const element = new PluginUsingElement
+
+		testContainer.replaceChildren(element)
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '1' }))
+
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('1')
+
+		testContainer.replaceChildren()
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '2' }))
+
+		// Do not listen for changes when not mounted
+		expect(lastDetectedKey).to.equal('1')
+
+		testContainer.replaceChildren(element)
+
+		expect(shadowText(element)).to.equal('')
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '3' }))
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('3')
 	})
 })

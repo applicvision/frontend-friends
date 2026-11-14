@@ -70,28 +70,7 @@ export type KeyPath<T extends object> = T extends Map<any, any> ? [`Map[${string
 		[K, ...(T[K] extends object ? KeyPath<T[K]> : [])]
 	}[keyof T]
 
-
-export interface Invalidatable {
-	invalidate: () => {}
-}
-
-export type PluginStateShape = object | undefined
-
-export type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
-
-export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
-
-export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element) => FFPlugin<T>
-
-export type PluginFactory<T extends PluginStateShape = PluginStateShape> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
-
-export interface FFPlugin<T extends PluginStateShape = PluginStateShape> {
-	state?: T
-	middleware?: (render: () => void) => void
-	cleanup?: () => void
-}
-
-type Prettify<T> = {
+export type Prettify<T> = {
 	[K in keyof T]: T[K];
 } & {}
 
@@ -108,3 +87,31 @@ export type PluginsShape = { [key: string]: PluginFactory<PluginStateShape> } | 
 export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
 	[Plugins, Refs] extends [undefined, undefined] ? State :
 	Prettify<UnionObject<State, Refs, Plugins>>
+
+export type UnionToIntersection<U> =
+	(U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
+
+
+
+/** Router types */
+
+interface Invalidatable {
+	invalidate: () => {}
+}
+
+export type PluginStateShape = object | undefined
+
+type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
+
+export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
+
+export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element) => FFPlugin<T>
+
+export type PluginFactory<T extends PluginStateShape = PluginStateShape> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
+
+export interface FFPlugin<T extends PluginStateShape = PluginStateShape> {
+	state?: T
+	middleware?: (render: () => void) => void
+	cleanup?: () => void
+}
+

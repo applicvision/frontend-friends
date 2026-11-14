@@ -119,18 +119,15 @@ class ResourceStore {
 	upsert(...entries) {
 		return entries.flatMap(entry => {
 			if (entry instanceof Array) {
-				return entry.map(newEntry => {
+				return entry.map(newEntry =>
 					this.#state[newEntry.id] ?
 						this.update(newEntry.id, newEntry) :
 						this.insertWithId(newEntry.id, /** @type {T} */(/** @type {unknown} */(newEntry)))
-					return newEntry.id
-				})
+				)
 			}
-			this.#state[entry.id] ?
+			return this.#state[entry.id] ?
 				this.update(entry.id, entry) :
 				this.insertWithId(entry.id, /** @type {T} */(/** @type {unknown} */(entry)))
-
-			return entry.id
 		})
 	}
 

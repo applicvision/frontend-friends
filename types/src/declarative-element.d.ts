@@ -1,9 +1,8 @@
-import { StoreSubscriber } from "./store.js";
-import { FFPlugin, InnerCSS, KeyPath, PluginFactory, PluginStateShape, StyleDeclaration, TwowayBinding } from "../type-utils.js";
+import { PluginFactory, PluginStateShape, InnerCSS, KeyPath, StyleDeclaration, TwowayBinding } from "../type-utils.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
 import { twoway as TwowayFunc } from "./special-attributes.js";
 
-export abstract class DeclarativeElement<SharedState = null> extends HTMLElement implements StoreSubscriber {
+export abstract class DeclarativeElement<SharedState = null> extends HTMLElement {
 	constructor()
 
 	static sharedStateName: string | null
@@ -17,8 +16,6 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 	protected forwardSharedState(): object | TwowayBinding
 
 	protected sharedStateChanged(): void
-
-	storeChanged(): void
 
 	get isRendering(): boolean
 

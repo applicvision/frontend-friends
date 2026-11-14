@@ -1,8 +1,9 @@
 import { autoSubscribe, clearSubscriber } from '@applicvision/frontend-friends/store'
 import { autoSubscribe as routerAutoSubscribe } from './router/base-router.js'
+import { definePlugin } from './plugins.js'
 
 /**
- * @import {FFPlugin, PluginCreator, PluginFactory, PluginStateShape} from '../types/type-utils.js'
+ * @import {FFPlugin} from '../types/type-utils.d.ts'
  * @import {BaseRouter} from './router/base-router.js'
  */
 
@@ -38,42 +39,7 @@ export function runWithPlugins(plugins, render) {
 }
 
 
-/**
- * @template {PluginStateShape} [State=undefined]
- * @param {PluginCreator<State>} pluginCreator
- * @return {PluginFactory<State>}
- **/
-export function definePlugin(pluginCreator) {
-	return (invalidatable, element) =>
-		pluginCreator(invalidatable.invalidate.bind(invalidatable), element)
-}
 
-
-export const mousemovePlugin = definePlugin((invalidate) => {
-
-	const state = { x: 0, y: 0 }
-
-	const abort = new AbortController()
-	document.addEventListener('mousemove', (event) => {
-		console.log('doc mouse move')
-		state.x = event.clientX
-		state.y = event.clientY
-		invalidate()
-	}, { signal: abort.signal })
-
-	return {
-		state,
-		cleanup: () => abort.abort()
-	}
-})
-
-const loggerPlugin = definePlugin(() => ({
-	middleware(render) {
-		console.time('Render time')
-		render()
-		console.timeEnd('Render time')
-	}
-}))
 
 
 export const storePlugin = definePlugin((invalidate) => {

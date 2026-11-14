@@ -34,6 +34,10 @@
       "types": "./types/src/store.d.ts",
       "default": "./src/store.js"
     },
+    "./plugins": {
+      "types": "./types/src/plugins.d.ts",
+      "default": "./src/plugins.js"
+    },
     "./parse-shape": {
       "types": "./types/src/parse-shape.d.ts",
       "default": "./src/parse-shape.js"

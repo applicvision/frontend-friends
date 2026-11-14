@@ -1,11 +1,9 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
 import { spy } from '@applicvision/js-toolbox/function-spy'
 import expect from '@applicvision/js-toolbox/expect'
-import { html, ref } from '@applicvision/frontend-friends'
-import { DynamicIsland, island } from '@applicvision/frontend-friends/island'
+import { html, ref, island, definePlugin } from '@applicvision/frontend-friends'
 import { getStore } from '../src/store.js'
 import { addTestContainer } from './helpers.js'
-import { definePlugin } from '../src/render-hooks.js'
 
 describe('Dynamic island', () => {
 

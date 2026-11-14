@@ -2,4 +2,4 @@ export { DeclarativeElement, css } from '@applicvision/frontend-friends/declarat
 export { html } from '@applicvision/frontend-friends/dynamic-fragment'
 export { island } from '@applicvision/frontend-friends/island'
 export { twoway, ref } from '@applicvision/frontend-friends/special-attributes'
-
+export { definePlugin } from '@applicvision/frontend-friends/plugins'

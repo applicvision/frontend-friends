@@ -1,5 +1,5 @@
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
-import { routerPlugin, runWithPlugins, storePlugin } from './render-hooks.js'
+import { routerPlugin, runWithPlugins, storePlugin } from './plugin-helpers.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
@@ -120,7 +120,7 @@ export class DynamicIsland extends EventTarget {
 	hydrate(container) {
 		this.#container = container
 		this.#registerPlugins()
-		this.#internalRender()
+		this.#internalRender(true)
 	}
 
 	get #renderArg() {
@@ -130,7 +130,7 @@ export class DynamicIsland extends EventTarget {
 
 		if (this.#pluginFactories) {
 			for (const pluginName in this.#pluginFactories) {
-				const { state } = this.#plugins[pluginName]
+				const { state } = this.#plugins[pluginName] ?? {}
 				if (state !== undefined) {
 
 					pluginState ??= /** @type {Record<string, any>} */({})
@@ -193,7 +193,7 @@ export class DynamicIsland extends EventTarget {
 
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
-	#internalRender() {
+	#internalRender(hydrate = false) {
 
 		const { container } = this
 
@@ -206,6 +206,9 @@ export class DynamicIsland extends EventTarget {
 			if (dynamicFragment.strings == this.#currentFragment?.strings) {
 				// update values
 				this.#currentFragment.values = dynamicFragment.values
+			} else if (hydrate) {
+				dynamicFragment.hydrate(container)
+				this.#currentFragment = dynamicFragment
 			} else {
 				this.#cacheIsland()
 

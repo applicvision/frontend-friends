@@ -315,7 +315,6 @@ export class BaseRouter {
 
 	/** @protected */
 	notifySubscribers() {
-		console.log('calling all subscribers', this.#subscribers)
 		this.#subscribers.forEach(subscriber => subscriber.routeChanged())
 	}
 

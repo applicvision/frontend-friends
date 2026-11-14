@@ -31,7 +31,7 @@ declare class ResourceStore<T extends { [key: string]: any }> {
 	clear(): void
 }
 
-type StoreType<T> = T extends abstract new (...args: any) => any ? InstanceType<T> : T
+type StoreType<T> = T extends new (...args: any) => any ? InstanceType<T> : T
 
 export function getStore<T extends { [key: string]: any }>(template: T): { [key in keyof T]: ResourceStore<StoreType<T[key]>> }
 

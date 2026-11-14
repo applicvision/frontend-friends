@@ -5,7 +5,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { BaseRouter, Route } from './base-router.js'
 import { DynamicIsland } from '../dynamic-island.js'
 import { parse } from '@applicvision/frontend-friends/parse-shape'
-import { DynamicFragment, html } from '../dynamic-fragment.js'
+import { html } from '../dynamic-fragment.js'
 import { pipeline } from 'node:stream/promises'
 import { createReadStream } from 'node:fs'
 
@@ -103,22 +103,12 @@ export class Router extends BaseRouter {
 		const resolvedFilePath = path.join(this.#fileDirectory, filePath)
 
 		const extension = path.extname(resolvedFilePath)
-		let view = ''
-		if (extension == '.js' || extension == '.mjs') {
-			const { default: defaultExport } = await import(resolvedFilePath)
 
-			if (typeof defaultExport == 'string') {
-				view = defaultExport
-			} else if (typeof defaultExport == 'function') {
-				view = await defaultExport(this.path)
-			} else if (defaultExport instanceof DynamicFragment) {
-				view = defaultExport.staticHtmlString
-			}
-			throw new Error('Invalid view content')
-		} else {
-			const fileContents = await readFile(resolvedFilePath)
-			view = fileContents.toString()
+		if (extension == '.js' || extension == '.mjs') {
+			throw new Error('JS files are not yet supported')
 		}
+		const fileContents = await readFile(resolvedFilePath)
+		const view = fileContents.toString()
 
 		// Normalize paths since we combine files
 
