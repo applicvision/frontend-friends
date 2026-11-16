@@ -82,7 +82,7 @@ type UnionObject<State, Refs, Plugins> =
 
 export type StateShape = object | string | number | boolean | undefined
 export type RefsShape = { [key: string]: ElementReference } | undefined
-export type PluginsShape = { [key: string]: PluginFactory<PluginStateShape> } | undefined
+export type PluginsShape = { [key: string]: PluginCreator<PluginStateShape> } | undefined
 
 export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
 	[Plugins, Refs] extends [undefined, undefined] ? State :
@@ -105,9 +105,7 @@ type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer St
 
 export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
 
-export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element) => FFPlugin<T>
-
-export type PluginFactory<T extends PluginStateShape = PluginStateShape> = (invalidatable: Invalidatable, element: Element) => FFPlugin<T>
+export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element | null) => FFPlugin<T>
 
 export interface FFPlugin<T extends PluginStateShape = PluginStateShape> {
 	state?: T

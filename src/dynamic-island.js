@@ -26,7 +26,7 @@ export class DynamicIsland extends EventTarget {
 	#plugins = {}
 
 	/** @type {Plugins | undefined} */
-	#pluginFactories
+	#pluginCreators
 
 	#render
 
@@ -38,7 +38,7 @@ export class DynamicIsland extends EventTarget {
 		super()
 		this.#state = this.#watchedState(init.state)
 		this.#refs = init.refs
-		this.#pluginFactories = init.plugins
+		this.#pluginCreators = init.plugins
 		this.#render = renderFunction
 	}
 
@@ -96,14 +96,14 @@ export class DynamicIsland extends EventTarget {
 
 	#registerPlugins() {
 		const container = this.#container
-		if (!container) return
-		if (this.#pluginFactories) {
-			for (const pluginName in this.#pluginFactories) {
-				this.#plugins[pluginName] = this.#pluginFactories[pluginName](this, container)
+		const invalidate = this.invalidate.bind(this)
+		if (this.#pluginCreators) {
+			for (const pluginName in this.#pluginCreators) {
+				this.#plugins[pluginName] = this.#pluginCreators[pluginName](invalidate, container)
 			}
 		}
-		this.#plugins._store = storePlugin(this, container)
-		this.#plugins._router = routerPlugin(this, container)
+		this.#plugins._store = storePlugin(invalidate, container)
+		this.#plugins._router = routerPlugin(invalidate, container)
 	}
 
 	get container() {
@@ -120,7 +120,9 @@ export class DynamicIsland extends EventTarget {
 	hydrate(container) {
 		this.#container = container
 		this.#registerPlugins()
-		this.#internalRender(true)
+		const dynamicFragment = this.#renderWithPlugins()
+		dynamicFragment.hydrate(container)
+		this.#currentFragment = dynamicFragment
 	}
 
 	get #renderArg() {
@@ -128,9 +130,9 @@ export class DynamicIsland extends EventTarget {
 		let pluginState,
 			refs = this.#refs
 
-		if (this.#pluginFactories) {
-			for (const pluginName in this.#pluginFactories) {
-				const { state } = this.#plugins[pluginName] ?? {}
+		if (this.#pluginCreators) {
+			for (const pluginName in this.#pluginCreators) {
+				const { state } = this.#plugins[pluginName]
 				if (state !== undefined) {
 
 					pluginState ??= /** @type {Record<string, any>} */({})
@@ -161,7 +163,13 @@ export class DynamicIsland extends EventTarget {
 	}
 
 	get hydratable() {
-		return this.#render(this.#renderArg).toString()
+		this.#registerPlugins()
+		try {
+			return this.#renderWithPlugins().toString()
+		} finally {
+			Object.values(this.#plugins ?? {}).forEach(plugin => plugin.cleanup?.())
+			this.#plugins = {}
+		}
 	}
 
 
@@ -191,39 +199,38 @@ export class DynamicIsland extends EventTarget {
 	/** @type {Map<TemplateStringsArray, DynamicFragment>} */
 	#fragmentCache = new Map()
 
+
+	#renderWithPlugins() {
+		return runWithPlugins(this.#plugins, this.#render, null, this.#renderArg)
+	}
+
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
-	#internalRender(hydrate = false) {
+	#internalRender() {
 
 		const { container } = this
 
 		if (!container) return
 
-		runWithPlugins(this.#plugins, () => {
+		const dynamicFragment = this.#renderWithPlugins()
 
-			const dynamicFragment = this.#render(this.#renderArg)
+		if (dynamicFragment.strings == this.#currentFragment?.strings) {
+			// update values
+			this.#currentFragment.values = dynamicFragment.values
+		} else {
+			this.#cacheIsland()
 
-			if (dynamicFragment.strings == this.#currentFragment?.strings) {
-				// update values
+			const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+
+			if (reusableFragment) {
+				reusableFragment.restoreIn(container)
+				this.#currentFragment = reusableFragment
 				this.#currentFragment.values = dynamicFragment.values
-			} else if (hydrate) {
-				dynamicFragment.hydrate(container)
-				this.#currentFragment = dynamicFragment
 			} else {
-				this.#cacheIsland()
-
-				const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
-
-				if (reusableFragment) {
-					reusableFragment.restoreIn(container)
-					this.#currentFragment = reusableFragment
-					this.#currentFragment.values = dynamicFragment.values
-				} else {
-					dynamicFragment.mount(container)
-					this.#currentFragment = dynamicFragment
-				}
+				dynamicFragment.mount(container)
+				this.#currentFragment = dynamicFragment
 			}
-		})
+		}
 		this.dispatchEvent(new Event('update'))
 	}
 }

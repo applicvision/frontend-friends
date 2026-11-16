@@ -5,6 +5,7 @@ import { definePlugin } from './plugins.js'
 /**
  * @import {FFPlugin} from '../types/type-utils.d.ts'
  * @import {BaseRouter} from './router/base-router.js'
+ * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
  */
 
 /**
@@ -32,13 +33,21 @@ function recursiveRunWithPlugins(plugins, render, pluginIndex = 0) {
 
 /**
  * @param {{[key: string]: FFPlugin}} plugins
- * @param {() => void} render
+ * @param {(...args: any[]) => DynamicFragment} render
+ * @param {any} [renderContext]
+ * @param {any[]} renderArgs
  */
-export function runWithPlugins(plugins, render) {
-	recursiveRunWithPlugins(Object.entries(plugins), render)
+export function runWithPlugins(plugins, render, renderContext, ...renderArgs) {
+
+	let fragment = /** @type {DynamicFragment | null} */(null)
+	recursiveRunWithPlugins(Object.entries(plugins), () => {
+		fragment = render.apply(renderContext, renderArgs)
+	})
+
+	if (!fragment) throw new Error('Render was not called')
+
+	return fragment
 }
-
-
 
 
 
@@ -59,7 +68,7 @@ export const storePlugin = definePlugin((invalidate) => {
 	}
 })
 
-export const routerPlugin = definePlugin((invalidate, element) => {
+export const routerPlugin = definePlugin((invalidate) => {
 	const subscriber = {
 		/** @type {BaseRouter|undefined} */
 		router: undefined,

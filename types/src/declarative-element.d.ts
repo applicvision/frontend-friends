@@ -1,4 +1,4 @@
-import { PluginFactory, PluginStateShape, InnerCSS, KeyPath, StyleDeclaration, TwowayBinding } from "../type-utils.js";
+import { PluginCreator, PluginStateShape, InnerCSS, KeyPath, StyleDeclaration, TwowayBinding } from "../type-utils.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
 import { twoway as TwowayFunc } from "./special-attributes.js";
 
@@ -23,7 +23,7 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 
 	protected reactive<T extends object>(object: T, effect?: (keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void): T
 
-	protected usePlugin<State extends PluginStateShape>(pluginCreator: PluginFactory<State>): State
+	protected usePlugin<State extends PluginStateShape>(pluginCreator: PluginCreator<State>): State
 
 	readonly pendingUpdate: Promise<any> | null
 

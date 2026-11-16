@@ -59,8 +59,7 @@
         "default": "./src/router/browser-router.js",
         "types": "./types/src/browser-router.d.ts"
       }
-    },
-    "./router/router-link": "./src/router/router-link.js"
+    }
   },
   "scripts": {
     "tdd": "test-browser --watch test --watch src",

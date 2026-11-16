@@ -3,7 +3,7 @@ import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
 import { storePlugin, routerPlugin, runWithPlugins } from './plugin-helpers.js'
 
 /**
- * @import {FFPlugin, PluginFactory, PluginStateShape, TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass} from '../types/type-utils.js'
+ * @import {FFPlugin, PluginCreator, PluginStateShape, TwowayBinding, KeyPath, StyleDeclaration as StyleDeclarationClass, InnerCSS as InnerCSSClass} from '../types/type-utils.js'
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
  * @import {DeclarativeElement as DeclarativeElementClass, css as CssFunc} from '../types/src/declarative-element.d.ts'
  **/
@@ -144,9 +144,10 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	}
 
 	connectedCallback() {
+		const invalidate = this.invalidate.bind(this)
 		this.#plugins = Object.fromEntries(
 			Object.entries(this.#pluginCreators).map(([id, creator]) =>
-				[id, creator(this, this)]
+				[id, creator(invalidate, this)]
 			)
 		)
 		this.#isRendering = true
@@ -200,7 +201,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 	/**
 	 * @template {PluginStateShape} T
-	 * @param {PluginFactory<T>} pluginCreator
+	 * @param {PluginCreator<T>} pluginCreator
 	 * @returns {T}
 	 */
 	usePlugin(pluginCreator) {
@@ -241,7 +242,7 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 	/** @type {Record<string, FFPlugin>} */
 	#plugins = {}
 
-	/** @type {Record<string, PluginFactory>} */
+	/** @type {Record<string, PluginCreator>} */
 	#pluginCreators = {
 		store: storePlugin,
 		router: routerPlugin
@@ -253,41 +254,38 @@ export class DeclarativeElement extends (globalThis.HTMLElement ?? class { }) {
 
 		if (!shadowRoot) return
 
-		runWithPlugins(this.#plugins, () => {
+		const dynamicFragment = runWithPlugins(this.#plugins, this.render, this)
 
+		if (!this.#currentFragment) {
+			dynamicFragment.mount(shadowRoot, this)
+			this.#currentFragment = dynamicFragment
+			return
+		}
+		if (dynamicFragment.strings == this.#currentFragment.strings) {
+			// update values
+			this.#currentFragment.values = dynamicFragment.values
+		} else {
 
-			const dynamicFragment = this.render()
+			// cache the previous dynamic fragment
+			this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
 
-			if (!this.#currentFragment) {
-				dynamicFragment.mount(shadowRoot, this)
-				this.#currentFragment = dynamicFragment
-				return
-			}
-			if (dynamicFragment.strings == this.#currentFragment.strings) {
-				// update values
+			// either restore from cache or mount new fragment
+			const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
+
+			if (reusableFragment) {
+				reusableFragment.restoreIn(shadowRoot)
+				this.#currentFragment = reusableFragment
 				this.#currentFragment.values = dynamicFragment.values
 			} else {
-
-				// cache the previous dynamic fragment
-				this.#fragmentCache.set(this.#currentFragment.strings, this.#currentFragment)
-
-				// either restore from cache or mount new fragment
-				const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
-
-				if (reusableFragment) {
-					reusableFragment.restoreIn(shadowRoot)
-					this.#currentFragment = reusableFragment
-					this.#currentFragment.values = dynamicFragment.values
-				} else {
-					dynamicFragment.mount(shadowRoot, this)
-					this.#currentFragment = dynamicFragment
-				}
+				dynamicFragment.mount(shadowRoot, this)
+				this.#currentFragment = dynamicFragment
 			}
-		})
+		}
 	}
 
 	disconnectedCallback() {
 		Object.values(this.#plugins).forEach(plugin => plugin.cleanup?.())
+		this.#plugins = {}
 	}
 }
 
