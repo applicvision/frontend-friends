@@ -53,6 +53,10 @@ class FakeResponse extends ServerResponse {
 		return this
 	}
 
+	get text() {
+		return this.#text
+	}
+
 	get json() {
 		return JSON.parse(this.#text)
 	}
@@ -205,29 +209,36 @@ export class Router extends BaseRouter {
 	* @param {T} responseShape
 	* @param {string} url
 	* @param {IncomingMessage} request
+	* @param {Record<string, string>} dataContainer
 	*/
-	async #injectRequest(responseShape, url, request) {
-		const originalUrl = request.url
-		request.url = url
+	async #injectRequest(responseShape, url, request, dataContainer) {
 
-		const response = new FakeResponse(request)
+		const RequestClass = /** @type {typeof IncomingMessage} */(request.constructor)
 
-		this.#server?.emit('request', request, response)
+		const localRequest = new RequestClass(request.socket)
+		Object.assign(localRequest, request)
+		localRequest.url = url
+
+		const response = new FakeResponse(localRequest)
+		this.#server?.emit('request', localRequest, response)
 		await response.completed
-		request.url = originalUrl
+
+		dataContainer[url] = response.text
+
 		return parse(responseShape, response.json)
 	}
 
 	/**
 	* @param {{route: Route, params: Record<string, string>, query: URLSearchParams}} routeMatch
 	* @param {IncomingMessage} request
+	* @param {Record<string, string>} requestData
 	*/
-	loadRoute({ route, params, query }, request) {
+	loadRoute({ route, params, query }, request, requestData) {
 		return route.load(
 			(responseShape, input, init) =>
 				typeof input == 'string' && !input.startsWith('http') ?
-					this.#injectRequest(responseShape, input, request) :
-					this.getJSON(responseShape, input, init)
+					this.#injectRequest(responseShape, input, request, requestData) :
+					getJSON(responseShape, input, requestData, init)
 			,
 			params,
 			query
@@ -271,12 +282,15 @@ export class Router extends BaseRouter {
 
 						const stopAtRoute = parent != null ? this.routeMap[parent] : undefined
 
+						/** @type {Record<string, string>} */
+						const requestData = {}
+
 						const [viewHtml, data] = await Promise.all([
 							this.loadView(route, stopAtRoute),
-							this.loadRoute({ route, params, query }, request)
+							this.loadRoute({ route, params, query }, request, requestData)
 						])
 
-						const responseHtml = await this.#injectDynamicContent(viewHtml, { route, params, query, data })
+						const responseHtml = await this.#injectDynamicContent(viewHtml, { route, requestData, params, query, data })
 
 						const responseObject = {
 							view: responseHtml,
@@ -298,9 +312,11 @@ export class Router extends BaseRouter {
 				}
 
 				try {
-					const [pageHtml, routeData] = await Promise.all([this.loadView(routeMatch.route), this.loadRoute(routeMatch, request)])
+					/** @type {Record<string, string>} */
+					const requestData = {}
+					const [pageHtml, routeData] = await Promise.all([this.loadView(routeMatch.route), this.loadRoute(routeMatch, request, requestData)])
 
-					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, ...routeMatch }, true)
+					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, requestData, ...routeMatch }, true)
 
 					response.writeHead(200, { 'content-type': 'text/html' }).end(responseHtml)
 				} catch (err) {
@@ -314,9 +330,9 @@ export class Router extends BaseRouter {
 
 	/**
 	 * @param {string} html
-	 * @param {{route: Route, data: unknown, params: Record<string, string>, query: URLSearchParams}} state
+	 * @param {{route: Route, data: unknown, requestData: Record<string, string>, params: Record<string, string>, query: URLSearchParams}} state
 	 */
-	async #injectDynamicContent(html, { route, data, params, query }, isFullRequest = false) {
+	async #injectDynamicContent(html, { route, data, requestData, params, query }, isFullRequest = false) {
 		const islands = await this.#dynamicIslandsIn(html)
 		if (islands.length > 0) {
 			this.setDataForRendering(route, data, params, query, () => {
@@ -328,7 +344,7 @@ export class Router extends BaseRouter {
 				}, html)
 				if (isFullRequest) {
 					html = html.replace(routerScriptTagRegex,
-						(_, __, routerSrc) => this.#clientRouterScriptWithData(routerSrc)
+						(_, __, routerSrc) => this.#clientRouterScriptWithData(routerSrc, requestData)
 					)
 				}
 			})
@@ -378,10 +394,13 @@ export class Router extends BaseRouter {
 		}))
 	}
 
-	/** @param {string} routerSrc */
-	#clientRouterScriptWithData(routerSrc) {
+	/** 
+	 * @param {string} routerSrc 
+	 * @param {Record<string, string>} loadData
+	*/
+	#clientRouterScriptWithData(routerSrc, loadData) {
 
-		const routeData = JSON.stringify({ data: this.routeData }, null, 2)
+		const routeData = JSON.stringify(loadData, null, 2)
 			.replace(/</g, '\\u003c')
 
 		return `
@@ -392,6 +411,23 @@ export class Router extends BaseRouter {
 		`.trim()
 
 	}
+}
+
+/**
+ * @template T
+ * @param {T} responseShape
+ * @param {string | URL | Request} input
+ * @param {Record<string, string>} dataContainer
+ * @param {RequestInit=} init
+ */
+async function getJSON(responseShape, input, dataContainer, init) {
+	const response = await fetch(input, init)
+	if (!response.ok) {
+		throw new Error('Unexpected response: ' + response.status)
+	}
+	const rawResponse = await response.json()
+	dataContainer[input.toString()] = rawResponse.toString()
+	return parse(responseShape, rawResponse)
 }
 
 

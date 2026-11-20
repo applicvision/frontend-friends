@@ -153,6 +153,7 @@ class ResourceStore {
 	/** @param {string} id */
 	delete(id) {
 		delete this.#state[id]
+		this.#notifySubscribers(id)
 	}
 
 	getAll() {

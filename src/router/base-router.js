@@ -8,21 +8,6 @@ import { parse } from '@applicvision/frontend-friends/parse-shape'
  */
 
 
-/**
- * @template T
- * @param {T} responseShape
- * @param {string | URL | Request} input
- * @param {RequestInit=} init
- */
-export async function getJSON(responseShape, input, init) {
-	const response = await fetch(input, init)
-	if (!response.ok) {
-		throw new Error('Unexpected response: ' + response.status)
-	}
-	const rawResponse = await response.json()
-	return parse(responseShape, rawResponse)
-}
-
 /**  @param {string[]} pathParts */
 function normalizedPath(...pathParts) {
 	return '/' + pathParts
@@ -91,7 +76,7 @@ export class Route {
 	}
 
 	/**
-	 * @param {typeof getJSON} get
+	 * @param {BaseRouter['getJSON']} get
 	 * @param {Record<string, string>} params
 	 * @param {URLSearchParams} query
 	 */
@@ -110,6 +95,9 @@ export class BaseRouter {
 
 	/** @type {unknown|null} */
 	#activeRouteData = null
+
+	/** @type {Record<string, string>} */
+	#requestCache = {}
 
 	get routeData() {
 		return this.#activeRouteData
@@ -138,6 +126,19 @@ export class BaseRouter {
 			this.#activeQuery = new URLSearchParams()
 			this.#activeRoute = null
 		}
+	}
+
+	/**
+	 * @protected
+	 * @param {Record<string, string>} cache
+	 */
+	setRequestCache(cache) {
+		this.#requestCache = cache
+	}
+
+	/** @protected */
+	clearRequestCache() {
+		this.#requestCache = {}
 	}
 
 	/**
@@ -225,7 +226,7 @@ export class BaseRouter {
 
 	/** @param {unknown[]} args  */
 	loadRoute(...args) {
-		return this.route?.load(this.getJSON, this.#activeParams, this.query)
+		return this.route?.load(this.getJSON.bind(this), this.#activeParams, this.query)
 	}
 
 	/**
@@ -236,14 +237,22 @@ export class BaseRouter {
 	 * @param {RequestInit=} init
 	 */
 	async getJSON(responseShape, input, init) {
-		// Subclass on server implements an alternative getJSON
-		return getJSON(responseShape, input, init)
+		const cached = this.#requestCache[input.toString()]
+		if (cached) {
+			return parse(responseShape, JSON.parse(cached))
+		}
+		const response = await fetch(input, init)
+		if (!response.ok) {
+			throw new Error('Unexpected response: ' + response.status)
+		}
+		const rawResponse = await response.json()
+		return parse(responseShape, rawResponse)
 	}
 
 	get isMounted() { return this.#routePatterns != null }
 
 	/**
-	 * @param {{directory?: string, base?: string, client?: {path: string, data?: unknown }}} options
+	 * @param {{directory?: string, base?: string, client?: {url: URL, dataTransfer?: unknown }}} options
 	 */
 	mount(options = {}) {
 		if (options.base) {
@@ -252,16 +261,6 @@ export class BaseRouter {
 		this.#routePatterns = new Map(this.routes.map(route => [
 			route, new URLPattern({ pathname: normalizedPath(this.basePath, route.path) + '{/}?' })
 		]))
-		if (options.client) {
-			const { path, data } = options.client
-
-			const match = this.resolve(path)
-			if (!match) throw new Error(`Route could not be mounted at location: ${path}`)
-
-			this.#activeRoute = match.route
-			this.#activeParams = match.params
-			this.setData(data)
-		}
 	}
 
 	get route() {
@@ -334,6 +333,7 @@ export class BaseRouter {
 	}
 
 	get path() {
+		this.#handleSubscribers()
 		return this.#activePath
 	}
 

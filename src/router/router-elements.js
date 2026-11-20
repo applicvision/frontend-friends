@@ -50,9 +50,10 @@ export class RouteIslandContainer extends HTMLElement {
 	 */
 	async hydrate(islandSrc) {
 
-		// TODO: fix basepath
-		/** @type {{default: DynamicIsland<any>}} */
-		const { default: island } = await import(`${router?.basePath ?? ''}/_ff-router/resource/${islandSrc}`)
+		const [filePath, exportName = 'default'] = islandSrc.split('?')
+
+		/** @type {Record<string, DynamicIsland>} */
+		const { [exportName]: island } = await import(`${router?.basePath ?? ''}/_ff-router/resource/${filePath}`)
 
 		this.#island = island
 

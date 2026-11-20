@@ -93,9 +93,8 @@ export class Router extends BaseRouter {
 
 	/** @param {NavigateEvent} event */
 	async #loadRouteData(event) {
-		const cachedData = this.#dataCache.get(event.destination.id)
-		if (cachedData) {
-			console.log('using cache')
+		if (this.#dataCache.has(event.destination.id)) {
+			const cachedData = this.#dataCache.get(event.destination.id)
 			// Do not set stale data to the store.
 			// It might have been written to later.
 			this.setData(cachedData, { skipStore: true })
@@ -109,18 +108,24 @@ export class Router extends BaseRouter {
 
 	/** @param {{base?: string}|undefined} options */
 	async mount(options = {}) {
-		const dataTransfer = document.getElementById('ff-router-data')?.textContent
+		super.mount(options)
 
-		/** @type {{data?: unknown} | null} */
-		const initialData = dataTransfer ? JSON.parse(dataTransfer) : null
+		const dataTransferElement = document.getElementById('ff-router-data')
 
-		super.mount({
-			...options,
-			client: {
-				path: location.href,
-				data: initialData?.data
-			}
-		})
+		/** @type {Record<string, string>} */
+		const dataTransfer = {}
+		if (dataTransferElement) {
+			Object.assign(dataTransfer, JSON.parse(dataTransferElement.textContent))
+			dataTransferElement.remove()
+		}
+
+		this.resolveAndUpdate(new URL(location.href))
+
+		this.setRequestCache(dataTransfer)
+
+		this.setData(await this.loadRoute())
+
+		this.clearRequestCache()
 
 		register(this)
 
