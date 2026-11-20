@@ -241,8 +241,10 @@ export class DynamicIsland extends EventTarget {
  */
 export function island(propertiesOrRender, renderFunction) {
 	if (typeof renderFunction == 'function') {
-		if (typeof propertiesOrRender == 'object' && ('state' in propertiesOrRender || 'refs' in propertiesOrRender || 'plugins' in propertiesOrRender)) {
-			return new DynamicIsland(propertiesOrRender, renderFunction)
+		if (typeof propertiesOrRender == 'object' && propertiesOrRender != null) {
+			if ('refs' in propertiesOrRender || 'plugins' in propertiesOrRender) {
+				return new DynamicIsland(propertiesOrRender, renderFunction)
+			}
 		}
 		return new DynamicIsland({ state: propertiesOrRender }, renderFunction)
 	}

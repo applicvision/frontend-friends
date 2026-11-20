@@ -93,11 +93,7 @@ export type UnionToIntersection<U> =
 
 
 
-/** Router types */
-
-interface Invalidatable {
-	invalidate: () => {}
-}
+/** Plugin types */
 
 export type PluginStateShape = object | undefined
 

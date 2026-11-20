@@ -40,7 +40,6 @@ class FakeResponse extends ServerResponse {
 	* @returns {this}
 	*/
 	end(chunk, encoding, callback) {
-
 		if (chunk && (typeof chunk === 'string' || Buffer.isBuffer(chunk))) {
 			this.#text += chunk.toString()
 		}
@@ -51,6 +50,10 @@ class FakeResponse extends ServerResponse {
 		this.#resolveCompleted?.()
 
 		return this
+	}
+
+	get ok() {
+		return this.statusCode >= 200 && this.statusCode < 300
 	}
 
 	get text() {
@@ -219,9 +222,17 @@ export class Router extends BaseRouter {
 		Object.assign(localRequest, request)
 		localRequest.url = url
 
+		const server = this.#server ??  /** @type {Server} */ (/** @type {any} */(request.socket).server)
+
+		if (!server) throw new Error('Could not inject request. Missing server')
+
 		const response = new FakeResponse(localRequest)
-		this.#server?.emit('request', localRequest, response)
+		server.emit('request', localRequest, response)
 		await response.completed
+
+		if (!response.ok) {
+			throw new Error(`Inject request failed: ${response.statusCode} ${url}`)
+		}
 
 		dataContainer[url] = response.text
 
@@ -236,7 +247,7 @@ export class Router extends BaseRouter {
 	loadRoute({ route, params, query }, request, requestData) {
 		return route.load(
 			(responseShape, input, init) =>
-				typeof input == 'string' && !input.startsWith('http') ?
+				typeof input == 'string' && !URL.canParse(input) ?
 					this.#injectRequest(responseShape, input, request, requestData) :
 					getJSON(responseShape, input, requestData, init)
 			,
@@ -271,35 +282,41 @@ export class Router extends BaseRouter {
 					if (resource == null) return response.writeHead(400).end()
 
 					if (type == 'view') {
-						const searchParams = new URLSearchParams(internalApiMatch.search.input)
-						const parent = searchParams.get('parent')
-						const query = new URLSearchParams(searchParams.get('query') || undefined)
-						const params = JSON.parse(searchParams.get('params') || '')
+						try {
+							const searchParams = new URLSearchParams(internalApiMatch.search.input)
+							const parent = searchParams.get('parent')
+							const query = new URLSearchParams(searchParams.get('query') || undefined)
+							const params = JSON.parse(searchParams.get('params') ?? '')
 
-						const route = this.routeMap[resource]
+							const route = this.routeMap[resource]
 
-						if (!route) return response.writeHead(404).end('No route found')
+							if (!route) return response.writeHead(404).end('No route found')
 
-						const stopAtRoute = parent != null ? this.routeMap[parent] : undefined
+							const stopAtRoute = parent != null ? this.routeMap[parent] : undefined
 
-						/** @type {Record<string, string>} */
-						const requestData = {}
+							/** @type {Record<string, string>} */
+							const requestData = {}
 
-						const [viewHtml, data] = await Promise.all([
-							this.loadView(route, stopAtRoute),
-							this.loadRoute({ route, params, query }, request, requestData)
-						])
+							const [viewHtml, data] = await Promise.all([
+								this.loadView(route, stopAtRoute),
+								this.loadRoute({ route, params, query }, request, requestData)
+							])
 
-						const responseHtml = await this.#injectDynamicContent(viewHtml, { route, requestData, params, query, data })
+							const responseHtml = await this.#injectDynamicContent(viewHtml, { route, requestData, params, query, data })
 
-						const responseObject = {
-							view: responseHtml,
-							data
+							const responseObject = {
+								view: responseHtml,
+								data
+							}
+
+							return response
+								.writeHead(200, { 'content-type': 'application/json' })
+								.end(JSON.stringify(responseObject))
+						} catch (error) {
+							console.error('Error rendering view', error)
+							return response.writeHead(500)
+								.end('Could not process request')
 						}
-
-						return response
-							.writeHead(200, { 'content-type': 'application/json' })
-							.end(JSON.stringify(responseObject))
 					}
 
 					return this.respondWithResource(response, resource)
@@ -320,9 +337,8 @@ export class Router extends BaseRouter {
 
 					response.writeHead(200, { 'content-type': 'text/html' }).end(responseHtml)
 				} catch (err) {
-					const error = /** @type {Error} */(err)
-					response.writeHead(500)
-					response.end(`<h2>Error rendering ${this.path}</h2><h3><pre>${error.message}</pre></h2><pre>${error.stack}</pre>`)
+					console.error('Error rendering route', err)
+					response.writeHead(500).end('Could not render route')
 				}
 			}
 		}
@@ -426,7 +442,7 @@ async function getJSON(responseShape, input, dataContainer, init) {
 		throw new Error('Unexpected response: ' + response.status)
 	}
 	const rawResponse = await response.json()
-	dataContainer[input.toString()] = rawResponse.toString()
+	dataContainer[input.toString()] = JSON.stringify(rawResponse)
 	return parse(responseShape, rawResponse)
 }
 

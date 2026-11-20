@@ -38,7 +38,7 @@ export function island<
 	Refs extends RefsShape = undefined,
 	Plugins extends PluginsShape = undefined
 >(
-	properties: { state?: State, refs?: Refs, plugins?: Plugins },
+	properties: { state?: State } & ({ refs: Refs, plugins?: Plugins } | { refs?: Refs, plugins: Plugins }),
 	render: (context: RenderContext<State, Refs, Plugins>) => DynamicFragment
 
 ): DynamicIsland<State, Refs, Plugins>
