@@ -8,6 +8,7 @@ import { parse } from '@applicvision/frontend-friends/parse-shape'
 import { html } from '../dynamic-fragment.js'
 import { pipeline } from 'node:stream/promises'
 import { createReadStream } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 class FakeResponse extends ServerResponse {
 	#text = ''
@@ -117,29 +118,20 @@ export class Router extends BaseRouter {
 		const fileContents = await readFile(resolvedFilePath)
 		const view = fileContents.toString()
 
-		// Normalize paths since we combine files
+		// Normalize paths since we combine files.
+		// Paths are made relative to the router directory, which is also how they are requested by the browser.
+		// Paths starting with / are already relative to the router directory.
 
 		const fileDirectory = path.dirname(resolvedFilePath)
 
+		/** @param {string} src */
+		const resourcePath = (src) => path
+			.relative(this.#fileDirectory, path.join(src.startsWith('/') ? this.#fileDirectory : fileDirectory, src))
+			.split(path.sep).join('/')
+
 		return view
-			.replace(routerScriptTagRegex, (match, prefix, src, tail) => {
-				if (src.startsWith('/')) {
-					return match
-				}
-				const rewrittenSrc = path.join(fileDirectory, src)
-
-				return prefix + rewrittenSrc + tail
-			})
-			.replaceAll(islandContainerRegex, (match, prefix, src, tail) => {
-				if (src.startsWith('/')) {
-					return match
-				}
-
-				const rewrittenSrc = path.join(fileDirectory, src)
-
-				// const startIndex = '<ff-island src="'.length
-				return prefix + rewrittenSrc + tail
-			})
+			.replace(routerScriptTagRegex, (_, prefix, src, tail) => prefix + resourcePath(src) + tail)
+			.replaceAll(islandContainerRegex, (_, prefix, src, tail) => prefix + resourcePath(src) + tail)
 	}
 
 	/**
@@ -190,9 +182,10 @@ export class Router extends BaseRouter {
 
 	/**
 	* @param {ServerResponse} response
-	* @param {string} filePath
+	* @param {string} resource Path relative to the router directory
 	*/
-	async respondWithResource(response, filePath) {
+	async respondWithResource(response, resource) {
+		const filePath = path.join(this.#fileDirectory, resource)
 		if (path.relative(this.#fileDirectory, filePath).startsWith('..')) {
 			return response.writeHead(403).end('No access')
 		}
@@ -270,7 +263,7 @@ export class Router extends BaseRouter {
 
 		const routerPattern = new URLPattern({ pathname: `${this.basePath}/_ff-router/:type(resource|view)/*` })
 
-		this.#fileDirectory = options?.directory ?? '.'
+		this.#fileDirectory = path.resolve(options?.directory ?? '.')
 		return async (request, response, server) => {
 			this.#server ??= server
 
@@ -390,7 +383,7 @@ export class Router extends BaseRouter {
 		return Promise.all(islandsToLoad.map(async ({ src, start, end }) => {
 			const [filePath, exportName = 'default'] = src.split('?')
 
-			const module = await import(path.resolve(filePath))
+			const module = await import(pathToFileURL(path.join(this.#fileDirectory, filePath)).href)
 
 			/** @type {DynamicIsland} */
 			const island = module[exportName]
