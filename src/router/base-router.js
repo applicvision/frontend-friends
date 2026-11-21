@@ -109,13 +109,15 @@ export class BaseRouter {
 	 * @param {unknown} data
 	 * @param {Record<string, string>} params
 	 * @param {URLSearchParams} query
+	 * @param {string} path
 	 * @param {() => void} syncCallback
 	 */
-	setDataForRendering(route, data, params, query, syncCallback) {
+	setDataForRendering(route, data, params, query, path, syncCallback) {
 		this.#activeRoute = route
 		this.setData(data)
 		this.#activeParams = params
 		this.#activeQuery = query
+		this.#activePath = path
 
 		try {
 			syncCallback()
@@ -124,6 +126,7 @@ export class BaseRouter {
 			this.#activeRouteData = null
 			this.#activeParams = {}
 			this.#activeQuery = new URLSearchParams()
+			this.#activePath = null
 			this.#activeRoute = null
 		}
 	}

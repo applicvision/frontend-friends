@@ -8,6 +8,7 @@ import { parse } from '@applicvision/frontend-friends/parse-shape'
 import { html } from '../dynamic-fragment.js'
 import { pipeline } from 'node:stream/promises'
 import { createReadStream } from 'node:fs'
+import { pathToFileURL } from 'node:url'
 
 class FakeResponse extends ServerResponse {
 	#text = ''
@@ -117,29 +118,20 @@ export class Router extends BaseRouter {
 		const fileContents = await readFile(resolvedFilePath)
 		const view = fileContents.toString()
 
-		// Normalize paths since we combine files
+		// Normalize paths since we combine files.
+		// Paths are made relative to the router directory, which is also how they are requested by the browser.
+		// Paths starting with / are already relative to the router directory.
 
 		const fileDirectory = path.dirname(resolvedFilePath)
 
+		/** @param {string} src */
+		const resourcePath = (src) => path
+			.relative(this.#fileDirectory, path.join(src.startsWith('/') ? this.#fileDirectory : fileDirectory, src))
+			.split(path.sep).join('/')
+
 		return view
-			.replace(routerScriptTagRegex, (match, prefix, src, tail) => {
-				if (src.startsWith('/')) {
-					return match
-				}
-				const rewrittenSrc = path.join(fileDirectory, src)
-
-				return prefix + rewrittenSrc + tail
-			})
-			.replaceAll(islandContainerRegex, (match, prefix, src, tail) => {
-				if (src.startsWith('/')) {
-					return match
-				}
-
-				const rewrittenSrc = path.join(fileDirectory, src)
-
-				// const startIndex = '<ff-island src="'.length
-				return prefix + rewrittenSrc + tail
-			})
+			.replace(routerScriptTagRegex, (_, prefix, src, tail) => prefix + resourcePath(src) + tail)
+			.replaceAll(islandContainerRegex, (_, prefix, src, tail) => prefix + resourcePath(src) + tail)
 	}
 
 	/**
@@ -190,9 +182,10 @@ export class Router extends BaseRouter {
 
 	/**
 	* @param {ServerResponse} response
-	* @param {string} filePath
+	* @param {string} resource Path relative to the router directory
 	*/
-	async respondWithResource(response, filePath) {
+	async respondWithResource(response, resource) {
+		const filePath = path.join(this.#fileDirectory, resource)
 		if (path.relative(this.#fileDirectory, filePath).startsWith('..')) {
 			return response.writeHead(403).end('No access')
 		}
@@ -270,7 +263,7 @@ export class Router extends BaseRouter {
 
 		const routerPattern = new URLPattern({ pathname: `${this.basePath}/_ff-router/:type(resource|view)/*` })
 
-		this.#fileDirectory = options?.directory ?? '.'
+		this.#fileDirectory = path.resolve(options?.directory ?? '.')
 		return async (request, response, server) => {
 			this.#server ??= server
 
@@ -302,7 +295,9 @@ export class Router extends BaseRouter {
 								this.loadRoute({ route, params, query }, request, requestData)
 							])
 
-							const responseHtml = await this.#injectDynamicContent(viewHtml, { route, requestData, params, query, data })
+							const responseHtml = await this.#injectDynamicContent(viewHtml, {
+								route, requestData, params, query, data, path: this.linkTo(route.path, params)
+							})
 
 							const responseObject = {
 								view: responseHtml,
@@ -333,7 +328,11 @@ export class Router extends BaseRouter {
 					const requestData = {}
 					const [pageHtml, routeData] = await Promise.all([this.loadView(routeMatch.route), this.loadRoute(routeMatch, request, requestData)])
 
-					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, requestData, ...routeMatch }, true)
+					const { pathname } = new URL(request.url ?? '', 'http://localhost')
+
+					const responseHtml = await this.#injectDynamicContent(pageHtml, {
+						data: routeData, requestData, path: pathname, ...routeMatch
+					}, true)
 
 					response.writeHead(200, { 'content-type': 'text/html' }).end(responseHtml)
 				} catch (err) {
@@ -346,12 +345,12 @@ export class Router extends BaseRouter {
 
 	/**
 	 * @param {string} html
-	 * @param {{route: Route, data: unknown, requestData: Record<string, string>, params: Record<string, string>, query: URLSearchParams}} state
+	 * @param {{route: Route, data: unknown, requestData: Record<string, string>, params: Record<string, string>, query: URLSearchParams, path: string}} state
 	 */
-	async #injectDynamicContent(html, { route, data, requestData, params, query }, isFullRequest = false) {
+	async #injectDynamicContent(html, { route, data, requestData, params, query, path }, isFullRequest = false) {
 		const islands = await this.#dynamicIslandsIn(html)
 		if (islands.length > 0) {
-			this.setDataForRendering(route, data, params, query, () => {
+			this.setDataForRendering(route, data, params, query, path, () => {
 
 				html = islands.reduceRight((view, { island, start, end }) => {
 					return view.slice(0, start) +
@@ -397,7 +396,7 @@ export class Router extends BaseRouter {
 		return Promise.all(islandsToLoad.map(async ({ src, start, end }) => {
 			const [filePath, exportName = 'default'] = src.split('?')
 
-			const module = await import(path.resolve(filePath))
+			const module = await import(pathToFileURL(path.join(this.#fileDirectory, filePath)).href)
 
 			/** @type {DynamicIsland} */
 			const island = module[exportName]
