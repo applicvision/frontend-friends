@@ -97,7 +97,7 @@ async function contentHeaders(filePath) {
 
 
 
-const islandContainerRegex = /(<ff-island src=")(?<islandSrc>[^"]+)(">(?<islandContent>.*?)<\/ff-island>)/sdg
+const islandContainerRegex = /(<ff-island src=")(?<islandSrc>[^"]+)(">.*?<\/ff-island>)/sdg
 
 const routerScriptTagRegex = /(<ff-router src=")(?<src>[^"]+)("><\/ff-router>)/
 
@@ -302,10 +302,8 @@ export class Router extends BaseRouter {
 								this.loadRoute({ route, params, query }, request, requestData)
 							])
 
-							const responseHtml = await this.#injectDynamicContent(viewHtml, { route, requestData, params, query, data })
-
 							const responseObject = {
-								view: responseHtml,
+								view: viewHtml,
 								data
 							}
 
@@ -333,7 +331,7 @@ export class Router extends BaseRouter {
 					const requestData = {}
 					const [pageHtml, routeData] = await Promise.all([this.loadView(routeMatch.route), this.loadRoute(routeMatch, request, requestData)])
 
-					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, requestData, ...routeMatch }, true)
+					const responseHtml = await this.#injectDynamicContent(pageHtml, { data: routeData, requestData, ...routeMatch })
 
 					response.writeHead(200, { 'content-type': 'text/html' }).end(responseHtml)
 				} catch (err) {
@@ -345,33 +343,29 @@ export class Router extends BaseRouter {
 	}
 
 	/**
-	 * @param {string} html
-	 * @param {{route: Route, data: unknown, requestData: Record<string, string>, params: Record<string, string>, query: URLSearchParams}} state
+	 * @param {string} htmlContent
+	 * @param {{route: Route, url: string, data: unknown, requestData: Record<string, string>, params: Record<string, string>, query: URLSearchParams}} state
 	 */
-	async #injectDynamicContent(html, { route, data, requestData, params, query }, isFullRequest = false) {
-		const islands = await this.#dynamicIslandsIn(html)
+	async #injectDynamicContent(htmlContent, { route, url, data, requestData, params, query }) {
+		const islands = await this.#dynamicIslandsIn(htmlContent)
 		if (islands.length > 0) {
-			this.setDataForRendering(route, data, params, query, () => {
+			this.setDataForRendering(route, data, url, params, query, () => {
 
-				html = islands.reduceRight((view, { island, start, end }) => {
+				htmlContent = islands.reduceRight((view, { island, src, start, end }) => {
 					return view.slice(0, start) +
-						island.hydratable +
+						html`<ff-island src="${src}" hydratable>${island.hydratable}</ff-island>`.staticHtmlString +
 						view.slice(end)
-				}, html)
-				if (isFullRequest) {
-					html = html.replace(routerScriptTagRegex,
-						(_, __, routerSrc) => this.#clientRouterScriptWithData(routerSrc, requestData)
-					)
-				}
+				}, htmlContent)
+				htmlContent = htmlContent.replace(routerScriptTagRegex,
+					(_, __, routerSrc) => this.#clientRouterScriptWithData(routerSrc, requestData)
+				)
 			})
-			return html
+			return htmlContent
 		}
-		if (isFullRequest) {
-			return html.replace(routerScriptTagRegex,
-				(_, __, routerSrc) => clientRouterScript(this.basePath, routerSrc)
-			)
-		}
-		return html
+
+		return htmlContent.replace(routerScriptTagRegex,
+			(_, __, routerSrc) => clientRouterScript(this.basePath, routerSrc)
+		)
 	}
 
 	/** 
@@ -384,10 +378,9 @@ export class Router extends BaseRouter {
 		const islandsToLoad = []
 		for (const foundIsland of foundIslands) {
 			const { islandSrc } = foundIsland.groups ?? {}
+			const [start, end] = foundIsland.indices?.[0] ?? []
 
-			const [start, end] = foundIsland.indices?.groups?.islandContent ?? []
-
-			start && end && islandsToLoad.push({
+			start != null && end != null && islandsToLoad.push({
 				src: islandSrc,
 				start,
 				end
@@ -403,6 +396,7 @@ export class Router extends BaseRouter {
 			const island = module[exportName]
 
 			return {
+				src,
 				island,
 				start,
 				end
@@ -415,6 +409,9 @@ export class Router extends BaseRouter {
 	 * @param {Record<string, string>} loadData
 	*/
 	#clientRouterScriptWithData(routerSrc, loadData) {
+		if (Object.keys(loadData).length == 0) {
+			return clientRouterScript(this.basePath, routerSrc)
+		}
 
 		const routeData = JSON.stringify(loadData, null, 2)
 			.replace(/</g, '\\u003c')

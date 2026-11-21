@@ -107,24 +107,27 @@ export class BaseRouter {
 	 * @protected
 	 * @param {Route} route
 	 * @param {unknown} data
+	 * @param {string} url
 	 * @param {Record<string, string>} params
 	 * @param {URLSearchParams} query
 	 * @param {() => void} syncCallback
 	 */
-	setDataForRendering(route, data, params, query, syncCallback) {
+	setDataForRendering(route, data, url, params, query, syncCallback) {
 		this.#activeRoute = route
 		this.setData(data)
+		this.#activePath = url
 		this.#activeParams = params
 		this.#activeQuery = query
 
 		try {
 			syncCallback()
 		} finally {
-			this.route?.store?.clear()
+			this.#activeRoute?.store?.clear()
 			this.#activeRouteData = null
 			this.#activeParams = {}
 			this.#activeQuery = new URLSearchParams()
 			this.#activeRoute = null
+			this.#activePath = null
 		}
 	}
 
@@ -148,7 +151,7 @@ export class BaseRouter {
 	setData(data, { skipStore = false } = {}) {
 		this.#activeRouteData = data
 		if (!skipStore && data) {
-			this.route?.store?.upsert(data)
+			this.#activeRoute?.store?.upsert(data)
 		}
 	}
 
@@ -194,7 +197,7 @@ export class BaseRouter {
 	resolveAndUpdate(url) {
 		const resolved = this.resolve(url)
 
-		this.#activePath = resolved ? url.pathname : null
+		this.#activePath = resolved?.url ?? null
 		this.#activeRoute = resolved?.route ?? null
 		this.#activeParams = resolved?.params ?? {}
 		this.#activeQuery = resolved?.query ?? new URLSearchParams()
@@ -218,6 +221,7 @@ export class BaseRouter {
 				return {
 					route,
 					params,
+					url: match.pathname.input,
 					query: new URLSearchParams(match.search.input)
 				}
 			}
@@ -226,7 +230,7 @@ export class BaseRouter {
 
 	/** @param {unknown[]} args  */
 	loadRoute(...args) {
-		return this.route?.load(this.getJSON.bind(this), this.#activeParams, this.query)
+		return this.#activeRoute?.load(this.getJSON.bind(this), this.#activeParams, this.query)
 	}
 
 	/**
@@ -264,6 +268,7 @@ export class BaseRouter {
 	}
 
 	get route() {
+		this.#handleSubscribers()
 		return this.#activeRoute
 	}
 
@@ -275,7 +280,7 @@ export class BaseRouter {
 	/** @param {string} path */
 	paramsFor(path) {
 		this.#handleSubscribers()
-		if (path == this.route?.path) {
+		if (path == this.#activeRoute?.path) {
 			return this.#activeParams
 		}
 		console.warn('Asking for params for inactive path. Throw?')
@@ -293,6 +298,11 @@ export class BaseRouter {
 				(path, [pathParam, value]) => path.replace(`:${pathParam}`, value),
 				normalizedPath(this.basePath, path)
 			)
+	}
+
+	/** @param {string} path */
+	isActive(path) {
+		return this.route?.path == path
 	}
 
 	/** @type {Set<RouteSubscriber>} */
@@ -320,7 +330,7 @@ export class BaseRouter {
 	/** @param {string} path */
 	dataFor(path) {
 		this.#handleSubscribers()
-		if (path == this.route?.path) {
+		if (path == this.#activeRoute?.path) {
 			return this.#activeRouteData
 		}
 		console.warn('Asking for data for inactive path. Throw?')

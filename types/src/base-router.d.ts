@@ -2,6 +2,12 @@ import type { Prettify, UnionToIntersection } from "../type-utils.js"
 import { DataShape } from "./parse-shape.js"
 import { ResourceStore } from "./store.js"
 
+export interface Route<Path extends string = string> {
+	readonly path: Path
+	readonly parent: Route<string> | null
+	readonly children: readonly Route<string>[]
+}
+
 export class BaseRouter<Routes> {
 	mount(...args: any[]): any
 
@@ -13,9 +19,17 @@ export class BaseRouter<Routes> {
 		[] : [params: Prettify<ExtractParams<T>>]
 	): string
 
+	isActive<T extends keyof Routes & string>(path: T): boolean
+
 	get query(): URLSearchParams
 
 	get basePath(): string
+
+	get path(): string | null
+
+	get route(): Route<keyof Routes & string> | null
+
+	get params(): Record<string, string>
 
 	get isMounted(): boolean
 

@@ -15,8 +15,12 @@ export class RouteIslandContainer extends HTMLElement {
 	#internals
 
 
-	get isHydrated() {
-		return this.#internals.states.has('hydrated')
+	get isMounted() {
+		return this.#internals.states.has('mounted')
+	}
+
+	get isHydratable() {
+		return this.hasAttribute('hydratable')
 	}
 
 	constructor() {
@@ -31,7 +35,7 @@ export class RouteIslandContainer extends HTMLElement {
 	 */
 	attributeChangedCallback(attribute, oldSrc, newSrc) {
 		if (attribute == 'src' && newSrc) {
-			this.hydrate(newSrc)
+			this.#load(newSrc)
 		}
 	}
 
@@ -40,7 +44,7 @@ export class RouteIslandContainer extends HTMLElement {
 	}
 
 	connectedCallback() {
-		if (this.isHydrated) {
+		if (this.isMounted) {
 			this.#island?.mount(this)
 		}
 	}
@@ -48,7 +52,7 @@ export class RouteIslandContainer extends HTMLElement {
 	/**
 	 * @param {string} islandSrc
 	 */
-	async hydrate(islandSrc) {
+	async #load(islandSrc) {
 
 		const [filePath, exportName = 'default'] = islandSrc.split('?')
 
@@ -57,8 +61,13 @@ export class RouteIslandContainer extends HTMLElement {
 
 		this.#island = island
 
-		island.hydrate(this)
-		this.#internals.states.add('hydrated')
+		if (this.isHydratable) {
+			island.hydrate(this)
+			this.removeAttribute('hydratable')
+		} else {
+			island.mount(this)
+		}
+		this.#internals.states.add('mounted')
 	}
 }
 
