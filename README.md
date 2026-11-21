@@ -117,7 +117,6 @@ The `html` tag function in front of the backtick string literal might look a bit
 The tagged template strategy is also used in [Lit](https://lit.dev/docs/templates/overview/).
 
 And it actually brings one additional advantage: we can get context awareness in the string. In the example code blocks here we get syntax highlighting for HTML even though we are in a JavaScript context. And there are useful extensions for VS Code to improve the developer experience. Feel free to explore available [extensions](https://marketplace.visualstudio.com/search?term=html%20tagged%20template&target=VSCode&category=All%20categories&sortBy=Relevance).
-</details>
 
 But now, back to our code. Our component is ready! We can now use the element directly in our HTML:
 
@@ -144,15 +143,12 @@ Now let's use our `greeting-label` in a context together with an input field whe
 import { island, html } from '@applicvision/frontend-friends'
 
 const app = island(
-  // The first argument to island can be thought of as a setup function. It is called once at island creation.
-  // Put your initial state in a property called 'state' on the object returned.
-  // Changes to that object will cause the island to update.
-  function () { 
-    return { state: { name: '' }}
-  },
+  // The first argument to island is the initial state.
+  // It is made reactive, so changes to it will cause the island to update.
+  { name: '' },
   // The second argument is the render function.
   // It is called with the current state of the island every time a visual update is needed.
-  ({ state }) => html`
+  (state) => html`
     <input
       placeholder="Enter your name"
       value=${state.name}
@@ -163,7 +159,7 @@ const app = island(
 )
 
 function updateName(event) {
-	app.state.name = event.target.value
+  app.state.name = event.target.value
 }
 
 // Here we assume an element with id app somewhere in the document.
@@ -179,8 +175,8 @@ So we rewrite the previous code slightly.
 import { island, html, twoway } from '@applicvision/frontend-friends'
 
 const app = island(
-  () => ({ state: { name: '' }}),
-  ({ state }) => html`
+  { name: '' },
+  (state) => html`
     <input
       placeholder="Enter your name"
       ff-share=${twoway(state, 'name')}
@@ -192,8 +188,122 @@ const app = island(
 app.mount(document.getElementById('app'))
 ```
 
+Islands can also have references to elements, `refs`, and use plugins, `plugins`. Then pass an object with the keys `state`, `refs` and/or `plugins`, and the render function is called with the same keys:
+
+```javascript
+import { island, html, ref, twoway } from '@applicvision/frontend-friends'
+
+const searchBox = island({
+  state: { query: '' },
+  refs: { input: ref(HTMLInputElement) }
+}, ({ state, refs }) => html`
+  <input ff-ref=${refs.input} ff-share=${twoway(state, 'query')}>
+  <button onclick=${() => refs.input.element?.focus()}>Focus</button>
+`)
+```
+
+More about refs and plugins in the [API documentation](https://github.com/applicvision/frontend-friends/blob/main/docs/api/README.md#island).
+
+## Server-side rendering and routing
+
+Islands can be rendered to HTML on the server, and then *hydrated* in the browser. Frontend Friends includes a router that does this for you, for Node.js. Views and layouts are plain HTML files. A layout marks where the views of the child routes go with `<ff-outlet></ff-outlet>`, and where the router script should be added with `<ff-router>`:
+
+```html
+<!-- app/layout.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <script type="importmap">
+    {
+      "imports": {
+        "@applicvision/frontend-friends": "https://esm.sh/@applicvision/frontend-friends",
+        "@applicvision/frontend-friends/": "https://esm.sh/@applicvision/frontend-friends/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <ff-outlet></ff-outlet>
+  <ff-router src="router.js"></ff-router>
+</body>
+</html>
+```
+
+Islands are placed in views and layouts with the `ff-island` element:
+
+```html
+<!-- app/books.html -->
+<h2>Books</h2>
+<ff-island src="islands/book-list.js"></ff-island>
+```
+
+The routes are declared in a module which is used both on the server and in the browser:
+
+```javascript
+// app/router.js
+import { Router } from '@applicvision/frontend-friends/router'
+
+export const router = Router.create({
+  layout: 'layout.html',
+  view: 'home.html',
+  children: {
+    books: {
+      view: 'books.html',
+      load: (get) => get([{ id: String, title: String }], '/api/books'),
+      children: {
+        ':id': {
+          view: 'book.html',
+          load: (get, { id }) => get({ id: String, title: String }, `/api/books/${id}`)
+        }
+      }
+    }
+  }
+})
+```
+
+And the islands can use the router to get data, parameters and links:
+
+```javascript
+// app/islands/book-list.js
+import { island, html } from '@applicvision/frontend-friends'
+import { router } from '../router.js'
+
+export default island(() => html`
+  <ul>${router.dataFor('books').map(book => html`
+    <li><a href=${router.linkTo('books/:id', { id: book.id })}>${book.title}</a></li>`)}
+  </ul>`
+)
+```
+
+Finally, mount the router in a Node.js server:
+
+```javascript
+// server.js
+import { createServer } from 'node:http'
+import path from 'node:path'
+import { router } from './app/router.js'
+
+const handleRoute = router.mount({ directory: path.join(import.meta.dirname, 'app') })
+
+const server = createServer((request, response) => handleRoute(request, response, server))
+server.listen(3000)
+```
+
+The page is rendered on the server, together with the data loaded by the route. In the browser, the router takes over: islands are hydrated, and following links only loads and replaces the part of the page that changes.
+
+The router requires Node.js 24 or later on the server, and a browser supporting the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API). Read more in the [API documentation](https://github.com/applicvision/frontend-friends/blob/main/docs/api/README.md#applicvisionfrontend-friendsrouter), and check out the [example app](#examples).
+
 ## Examples
 A more extended example is located in the docs folder of the repository. The JavaScript can be found [here](https://github.com/applicvision/frontend-friends/blob/main/docs/js/todo-app.js). And, to check out the result of the example, please visit https://applicvision.github.io/frontend-friends/examples/todo.
+
+An example of a server-rendered application using the router is located in [`examples/library`](https://github.com/applicvision/frontend-friends/tree/main/examples/library). It uses nested layouts, islands, route data, query parameters and a store. To run it, clone the repository and run:
+
+```console
+$ npm install
+$ npm run serve-example
+```
+
+Then visit http://localhost:3002.
 
 
 ## Typescript
@@ -212,3 +322,16 @@ class MyStatefulElement extends DeclarativeElement<boolean> {
 ## API Documentation
 
 API documentation is available [here](https://github.com/applicvision/frontend-friends/blob/main/docs/api/README.md).
+
+## Development
+
+Node.js 24 or later is required to run the tests.
+
+```console
+$ npm install
+$ npm run node-test        # Node.js unit tests
+$ npm run tdd              # Browser unit tests, in watch mode. Visit http://localhost:3000
+$ npx playwright test      # Browser unit tests and end-to-end tests of the examples
+```
+
+The end-to-end tests in the `ci` folder start their own servers for the browser unit tests, the docs and the router example (`npm run serve-example`).
