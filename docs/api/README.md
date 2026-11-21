@@ -1,3 +1,17 @@
+## Modules
+
+- [`@applicvision/frontend-friends`](#applicvisionfrontend-friends) – the most commonly used functionality
+- [`@applicvision/frontend-friends/declarative-element`](#applicvisionfrontend-friendsdeclarative-element) – custom elements
+- [`@applicvision/frontend-friends/island`](#applicvisionfrontend-friendsisland) – interactive islands
+- [`@applicvision/frontend-friends/dynamic-fragment`](#applicvisionfrontend-friendsdynamic-fragment) – dynamic HTML
+- [`@applicvision/frontend-friends/special-attributes`](#applicvisionfrontend-friendsspecial-attributes) – two-way bindings, element references
+- [`@applicvision/frontend-friends/attribute-helpers`](#applicvisionfrontend-friendsattribute-helpers) – helpers for attribute values
+- [`@applicvision/frontend-friends/deep-watch`](#applicvisionfrontend-friendsdeep-watch) – reactive objects
+- [`@applicvision/frontend-friends/plugins`](#applicvisionfrontend-friendsplugins) – extend islands and elements
+- [`@applicvision/frontend-friends/store`](#applicvisionfrontend-friendsstore) – shared data
+- [`@applicvision/frontend-friends/parse-shape`](#applicvisionfrontend-friendsparse-shape) – validate data
+- [`@applicvision/frontend-friends/router`](#applicvisionfrontend-friendsrouter) – server-side rendering and routing
+
 ## `@applicvision/frontend-friends`
 
 The main module exports the most commonly used functionality from the other exported modules.
@@ -6,6 +20,9 @@ The main module exports the most commonly used functionality from the other expo
 - [`html`](#htmlstrings-string-values--dynamicfragment)
 - [`css`](#cssstrings-string-values)
 - [`island`](#island)
+- [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
+- [`ref`](#reftype-elementreference)
+- [`definePlugin`](#defineplugincreator-plugincreator-plugincreator)
 
 ## `@applicvision/frontend-friends/declarative-element`
 
@@ -26,7 +43,7 @@ Base class for creating custom elements. Extend this class, and then register it
 ```javascript
 class MyCustomElement extends DeclarativeElement {}
 
-customElements.define(MyCustomElement, 'custom-element')
+customElements.define('custom-element', MyCustomElement)
 ```
 
 #### Constructor
@@ -108,6 +125,42 @@ class MyCoolInput extends DeclarativeElement {
 ##### `invalidate(): Promise`
 
 Requests an asynchronous re-rendering of the component. A promise is returned, which resolves when the component has been updated.
+
+##### `get isRendering: boolean`
+
+`true` while the render function is running.
+
+##### `protected componentDidUpdate()`
+
+Override this function to run code after the component has been updated. It is not called after the first rendering.
+
+##### `protected twoway(state, property)`
+
+The [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding) function, available as a method for convenience. Effects added with `withEffect` are called with the component as `this`.
+
+*Example:*
+```javascript
+render() {
+    return html`<input ff-share=${this.twoway(this.state, 'text').withEffect(this.textChanged)}>`
+}
+```
+
+##### `protected usePlugin<State>(pluginCreator: PluginCreator<State>): State`
+
+Adds a [plugin](#applicvisionfrontend-friendsplugins) to the component. Call it when the component is constructed, typically in a field initializer. The returned object gives access to the state of the plugin.
+
+*Example:*
+```javascript
+class ClockElement extends DeclarativeElement {
+    clock = this.usePlugin(clockPlugin)
+
+    render() {
+        return html`<time>${this.clock.time.toLocaleTimeString()}</time>`
+    }
+}
+```
+
+Elements automatically subscribe to the [store](#applicvisionfrontend-friendsstore) resources and the [router](#applicvisionfrontend-friendsrouter) properties read during rendering, so there is no need to add plugins for that.
 
 ##### `reactive<T extends object>(object: T, effect?: (keypath: string[]) => void): T`
 
@@ -202,15 +255,14 @@ The module exports a factory function for creating islands and the underlying cl
 
 ### `island()`
 
-Factory function to create islands. It can be used in two ways.
+Factory function to create islands. It can be used in three ways.
 
-#### Island without reactive state
+#### Island without state
 
-Firstly, you can pass it just one argument, a render function. In this case the island will not have any reactive state, and updates need to be triggered manually with [`.invalidate()`](#invalidate-promise-1).
+Pass just one argument, a render function. The island will not have any reactive state, and updates need to be triggered manually with [`.invalidate()`](#invalidate-promise-1). However, the island automatically updates when [store](#applicvisionfrontend-friendsstore) resources or [router](#applicvisionfrontend-friendsrouter) properties it reads change.
 
-The signature of this function is:
 ```typescript
-island(renderFunction: () => DynamicFragment): DynamicIsland<{}>
+island(render: () => DynamicFragment): DynamicIsland
 ```
 
 *Example:*
@@ -228,41 +280,58 @@ externalState.value = 'goodbye'
 myIsland.invalidate()
 ```
 
+#### Island with state
 
-#### Island with reactive state
-
-The other way to use the `island` function is to pass it two arguments; a setup function and a render function.
-
-The function signature for that is:
+Pass the initial state as the first argument, and the render function as the second. If the state is an object, it is made reactive using [`deepWatch()`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t), so changes to it cause the island to update. The render function is called with the state.
 
 ```typescript
-island<T extends { state?: object }>(
-    setup: () => T,
-    renderFunction: (islandContext: T) => DynamicFragment
-): DynamicIsland<T>
+island<T>(initialState: T, render: (state: T) => DynamicFragment): DynamicIsland<T>
 ```
-
-The first argument in this case is a function that is called before initial mount. It should return an object which can be regarded as the 'context' object for the island. If the returned object includes an object on the key `state`, that object in turn will be made reactive using [`deepWatch()`](#deepwatcht-extends-objecttarget-t-modificationcallback-keypath-string--void-t). That state will later be accessible and mutable as a property of the island.
-
-> [!Note]
-> The reason for the extra nesting of the `state` object is that in the future there might be additions to the context object.
-
-The second argument is the render function, which will be called every time a rendering is needed. When using islands with a setup function, the render function gets called with the context object as the only argument.
 
 *Example:*
 ```javascript
 const helloIsland = island(
-    // Setup (called initially)
-    () => ({state: {name: 'unknown'}}),
-
-    // Render (called on every state change)
-    ({ state }) => html`<h1>Hello ${state.name}</h1>`
+    { name: 'unknown' },
+    (state) => html`<h1>Hello ${state.name}</h1>`
 )
 
 helloIsland.mount(document.body)
 
 // Changing state triggers update
 helloIsland.state.name = 'World'
+```
+
+The state can also be a primitive value. Then assign a new value to [`.state`](#get-state--set-state) to update the island.
+
+```javascript
+const counter = island(0, (count) => html`<button onclick=${() => counter.state++}>${count}</button>`)
+```
+
+> [!Note]
+> If the state object has a key named `refs` or `plugins`, it is interpreted as the object form described below.
+
+#### Island with refs and plugins
+
+To use [element references](#reftype-elementreference) or [plugins](#applicvisionfrontend-friendsplugins), pass an object with the keys `state`, `refs` and/or `plugins` as the first argument. The render function is then called with an object with the same keys. For plugins, the value is the state of each plugin.
+
+```typescript
+island(
+    properties: { state?: State, refs?: Refs, plugins?: Plugins },
+    render: (context: { state: State, refs: Refs, plugins: PluginsState }) => DynamicFragment
+): DynamicIsland<State, Refs, Plugins>
+```
+
+*Example:*
+```javascript
+const searchIsland = island({
+    state: { query: '' },
+    refs: { input: ref(HTMLInputElement) },
+    plugins: { clock: clockPlugin }
+}, ({ state, refs, plugins }) => html`
+    <input ff-ref=${refs.input} ff-share=${twoway(state, 'query')}>
+    <button onclick=${() => refs.input.element?.select()}>Select</button>
+    <time>${plugins.clock.time.toLocaleTimeString()}</time>
+`)
 ```
 
 
@@ -278,28 +347,63 @@ Underlying class for islands. It is similar to `DeclarativeElement` in the sense
 
 The recommended way to create instances of `DynamicIsland` is to use the [island](#island) function.
 
+```typescript
+new DynamicIsland(properties: { state?, refs?, plugins? }, render: (context) => DynamicFragment)
+```
+
+#### Events
+
+| Event | Description |
+| --- | --- |
+| `mount` | Dispatched when the island has been mounted. |
+| `update` | Dispatched after every rendering of a mounted island. |
+| `statechange` | Dispatched when the reactive state changes. The `detail` contains the `keypath` of the change. |
+
+*Example:*
+```javascript
+anIsland.addEventListener('statechange', (event) => console.log('changed', event.detail.keypath))
+```
+
 #### instance properties
+
+##### `get container: HTMLElement|null`
+
+The element in which the island is mounted, or `null`.
 
 ##### `get hydratable: string`
 
-Returns a string representation of the island for server-side rendering. Similar to [`mount()`](#mountcontainer-htmlelement), this will call the setup- and render function, but it will not setup reactivity.
+Returns a string representation of the island for server-side rendering. It calls the render function, with the plugins set up, but does not set up any reactivity. Use [`.hydrate()`](#hydratecontainer-htmlelement) in the browser to make the HTML interactive.
+
+*Example:*
+```javascript
+// On the server
+const html = `<div id="app">${myIsland.hydratable}</div>`
+
+// In the browser
+myIsland.hydrate(document.getElementById('app'))
+```
+
+##### `get isMounted: boolean`
+
+`true` if the island is mounted or hydrated.
 
 #####  `pendingUpdate: Promise|null`
 
 If an update is awaiting, `pendingUpdate` is a promise which resolves when the update is complete. Otherwise it is `null`.
 
-##### `get state`
+##### `get refs`
 
-This is the current reactive state of the island. Changes to the state will cause the island to update.
+The [element references](#reftype-elementreference) passed to the island.
+
+##### `get state` / `set state`
+
+This is the current reactive state of the island. Changes to the state will cause the island to update. Assigning a new state also causes an update.
 
 *Example:*
 ```javascript
 const anIsland = island(
-    // setup
-    () => ({ state: { value: 1 } }),
-
-    // render
-    ({ state }) => html`${state.value}`
+    { value: 1 },
+    (state) => html`${state.value}`
 )
 
 setInterval(() => anIsland.state.value++, 1000)
@@ -310,7 +414,10 @@ setInterval(() => anIsland.state.value++, 1000)
 
 ##### `hydrate(container: HTMLElement)`
 
-If `.hydratable` has been used on the server to send HTML to the client, `.hydrate()` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. See [`.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
+If [`.hydratable`](#get-hydratable-string) has been used on the server to send HTML to the client, `.hydrate()` can be used to prepare the island for interactivity. Pass the container which contains the hydratable HTML. The existing elements are kept, and event listeners are attached. See [`DynamicFragment.hydrate()`](#hydratecontainer-htmlelementshadowroot-eventhandlercontext-unknown) for more details.
+
+> [!Note]
+> The state when hydrating must give the same result as on the server. Otherwise the content will not match the state until it changes.
 
 ##### `invalidate(): Promise`
 
@@ -318,17 +425,17 @@ Requests an asynchronous re-rendering of the island. A promise is returned, whic
 
 ##### `mount(container: HTMLElement)`
 
-Mounts the island in the given container. This method will call your setup and render functions respectively to collect information about the initial content of the island.
+Mounts the island in the given container, replacing its content. If the island is already mounted somewhere else, it is first unmounted from there.
 
-##### `unmount(cacheFragment: boolean)`
+##### `unmount(cacheFragment?: boolean)`
 
-Unmounts the island, and optionally caches the current fragment in memory for later reuse. By default, the fragment cache is cleared on unmount.
+Unmounts the island, and optionally caches the current fragment in memory for later reuse. By default, the fragment cache is cleared on unmount. The plugins are cleaned up, and subscriptions to stores and the router are removed.
 
 ## `@applicvision/frontend-friends/dynamic-fragment`
 
 This is the module for creating dynamic pieces of HTML. It is used in both [`DeclarativeElement`](#declarativeelement) and islands. It exports the following:
 
-- [`html`](#html--dynamicfragment)
+- [`html`](#htmlstrings-string-values--dynamicfragment)
 - [`DynamicFragment`](#dynamicfragment)
 - [`innerHTML`](#innerhtml)
 - [`PropertySetter`](#propertysetter)
@@ -631,6 +738,8 @@ The module exports two functions:
 
 Pass in a target object to get a deep copy back which will be watched for changes. For every change to the returned object, the `modificationCallback` will be called synchronously with the keypath of the changed property as argument.
 
+The callback is also called with the new and the old value as second and third arguments. Note that they might be the same.
+
 *Example:*
 ```javascript
 const watched = deepWatch(
@@ -654,12 +763,19 @@ watchedArray.unshift(0)
 // will eventually log [0, 1, 2, 3]
 ```
 
-## `@applicvision/frontend-friends/attribute-helpers`
+## `@applicvision/frontend-friends/special-attributes`
 
-Utility module to work with attributes. It exports one function:
+Special attributes are attributes starting with `ff-`, which get special treatment in a [`DynamicFragment`](#dynamicfragment). Two special attributes are built in:
+
+* `ff-share` – two-way bindings, see [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
+* `ff-ref` – element references, see [`ref`](#reftype-elementreference)
+
+The module exports:
 
 * [`twoway`](#twowayt-extends-objectstate-t-property-keyof-t-twowaybinding)
-* [`tokens`](#tokensdefinitionparts-object--string--object--string-string)
+* [`ref`](#reftype-elementreference)
+* [`registerSpecialAttribute`](#registerspecialattributename-string-specification-specialattribute)
+* [`unregisterSpecialAttribute`](#unregisterspecialattributename-string-boolean)
 
 ### `twoway<T extends object>(state: T, property: keyof T):` [`TwowayBinding`](#twowaybinding)
 
@@ -672,11 +788,8 @@ A common scenario would be having a state with a string that should be edited by
 *Example:*
 ```javascript
 island(
-    // setup
-    () => ({ state: { text: '' } }),
-
-    // render
-    ({ state }) => html`
+    { text: '' },
+    (state) => html`
         <input ff-share=${twoway(state, 'text')}>
         <div>length: ${state.text.length}</div>
     `
@@ -687,10 +800,10 @@ island(
 
 *Example:*
 ```javascript
-class ToggleButton {
+class ToggleButton extends DeclarativeElement {
     render() {
         return html`
-            <button onclick=${this.sharedState = !this.sharedState}>
+            <button onclick=${() => this.sharedState = !this.sharedState}>
                 ${this.sharedState ? 'on' : 'off'}
             </button>
             `
@@ -705,8 +818,67 @@ It is also possible to attach a side effect to the twoway binding, by using `wit
 
 *Example:*
 ```javascript
-html`<input ff-share=${twoway(state, 'text').withEffect(newText => console.log('The new text', newText))}`
+html`<input ff-share=${twoway(state, 'text').withEffect(newText => console.log('The new text', newText))}>`
 ```
+
+If the value in the state has a different type than the value of the field, two transform functions can be passed. The first converts the value from the field to the state, and the second from the state to the field.
+
+*Example:*
+```javascript
+// state.amount is a number, but the input field works with strings
+html`<input type="number" ff-share=${twoway(state, 'amount', Number, String)}>`
+```
+
+### `ref(type?): ElementReference`
+
+Creates a reference to an element in a template. Pass it to the `ff-ref` special attribute, and the element is available as `.element` after rendering. Optionally pass the expected element class. Then the type of `.element` is that class, and an error is thrown if the element has a different type.
+
+`ElementReference` has the following properties:
+
+* `element` – the referenced element, or `null`
+* `elementOrThrow` – the referenced element. Throws if it is missing.
+
+*Example:*
+```javascript
+const form = island({
+    refs: { input: ref(HTMLInputElement) }
+}, ({ refs }) => html`
+    <input ff-ref=${refs.input}>
+    <button onclick=${() => refs.input.elementOrThrow.focus()}>Focus</button>
+`)
+```
+
+### `registerSpecialAttribute(name: string, specification: SpecialAttribute)`
+
+Registers a custom special attribute. The name must start with `ff-`. The specification is an object with the following properties:
+
+* `update(element, value, previousValue)` – required. Called when the attribute is rendered, and every time the value changes.
+* `connect(element, getCurrentValue)` – optional. Called once, when the element is connected to the fragment.
+* `isElementValid(element)` – optional. Return `false` to throw an error if the attribute is used on an unsupported element.
+* `isValueValid(value)` – optional. Return `false` to throw an error if the value is not supported.
+
+*Example:*
+```javascript
+registerSpecialAttribute('ff-focus', {
+    isValueValid: (value) => typeof value == 'boolean',
+    update(element, shouldFocus) {
+        if (shouldFocus) element.focus()
+    }
+})
+
+html`<input ff-focus=${state.editing}>`
+```
+
+### `unregisterSpecialAttribute(name: string): boolean`
+
+Removes a special attribute registered with [`registerSpecialAttribute`](#registerspecialattributename-string-specification-specialattribute). The built-in attributes can not be removed.
+
+## `@applicvision/frontend-friends/attribute-helpers`
+
+Utility module to work with attributes. It exports two functions:
+
+* [`tokens`](#tokensdefinitionparts-object--string--object--string-string)
+* [`style`](#styledeclaration-partialcssstyledeclaration-string)
 
 ### `tokens(...definitionParts: (object | string | (object | string)[])[]): string`
 
@@ -725,3 +897,427 @@ html`<button class=${classes}>click</button>`
 const classes2 = tokens('alfa beta', [{ 'gamma': true }], 'beta ', { 'beta alfa': true })
 // classes2 => 'alfa beta gamma'
 ```
+
+### `style(declaration: Partial<CSSStyleDeclaration>): string`
+
+Creates a string for the `style` attribute from an object. Property names are written in camel case, as in `CSSStyleDeclaration`. Properties with values which are falsy (except `0`) are left out.
+
+*Example:*
+```javascript
+const styleString = style({ backgroundColor: 'yellow', marginTop: 0, display: isHidden && 'none' })
+// styleString => 'background-color: yellow; margin-top: 0'
+html`<div style=${styleString}>Hello</div>`
+```
+
+## `@applicvision/frontend-friends/plugins`
+
+Plugins add reusable behaviour to [islands](#island) and [`DeclarativeElement`](#declarativeelement). A plugin can have state which is available when rendering, wrap the rendering, and trigger updates.
+
+The [store](#applicvisionfrontend-friendsstore) and the [router](#applicvisionfrontend-friendsrouter) are connected to islands and elements with built-in plugins. That is how islands and elements update when they change.
+
+### `definePlugin(creator: PluginCreator): PluginCreator`
+
+Defines a plugin. It simply returns the creator function, but gives correct type hints. The creator function is called when the island is mounted (or hydrated), or when the element is connected. It is called with two arguments:
+
+* `invalidate` – a function which requests an update of the island or element.
+* `element` – the element of the component, or the container of the island. On the server, when rendering [`hydratable`](#get-hydratable-string), it is `null`.
+
+The creator should return an object with any of these properties:
+
+* `state` – an object which is passed to the render function.
+* `middleware(render)` – called on every rendering. It must call `render` exactly once. This can be used to do something before or after the rendering.
+* `cleanup()` – called when the island is unmounted, or the element is disconnected.
+
+*Example:*
+```javascript
+import { definePlugin, island, html } from '@applicvision/frontend-friends'
+
+const clockPlugin = definePlugin((invalidate) => {
+    const state = { time: new Date() }
+    const interval = setInterval(() => {
+        state.time = new Date()
+        invalidate()
+    }, 1000)
+    return {
+        state,
+        cleanup: () => clearInterval(interval)
+    }
+})
+
+// In an island
+const clock = island(
+    { plugins: { clock: clockPlugin } },
+    ({ plugins }) => html`<time>${plugins.clock.time.toLocaleTimeString()}</time>`
+)
+
+// In an element
+class ClockElement extends DeclarativeElement {
+    clock = this.usePlugin(clockPlugin)
+
+    render() {
+        return html`<time>${this.clock.time.toLocaleTimeString()}</time>`
+    }
+}
+```
+
+## `@applicvision/frontend-friends/store`
+
+The store holds shared data, organised in resources identified by an `id`. Islands and elements which read from the store during rendering subscribe to what they read, and update automatically when it changes.
+
+### `getStore(template: object)`
+
+Creates a store with one `ResourceStore` for every key of the template. The values of the template are only used for type hints.
+
+*Example:*
+```javascript
+import { getStore } from '@applicvision/frontend-friends/store'
+
+class Book {
+    /** @type {string} */ id
+    /** @type {string} */ title
+}
+
+export const store = getStore({ books: Book })
+
+store.books.insert({ id: '1', title: 'Frankenstein' })
+
+const bookIsland = island(() => html`<h1>${store.books.get('1').title}</h1>`)
+
+// Updates the island
+store.books.update('1', { title: 'Frankenstein; or, The Modern Prometheus' })
+```
+
+Reading a resource with `get(id)` subscribes to changes of that resource. Reading all resources with `getAll()` subscribes to all changes in the resource store.
+
+### `ResourceStore`
+
+#### instance methods
+
+##### `get(id: string): T`
+
+Returns the resource with the given id.
+
+##### `getAll(): T[]`
+
+Returns all resources.
+
+##### `insert(...entries: T[] | T[][]): T[]`
+
+Inserts one or more resources. Every resource must have an `id` property. Arrays of resources are also accepted. Throws if a resource with the same id already exists.
+
+##### `insertWithId(id: string, entry: T): T`
+
+Inserts a resource with an explicit id.
+
+##### `upsert(...entries: T[] | T[][]): T[]`
+
+Like `insert`, but existing resources are updated instead.
+
+##### `update(id: string, updates: Partial<T>): T`
+
+Updates the resource with the given id by assigning the updated properties to it.
+
+##### `delete(id: string)`
+
+Deletes the resource with the given id.
+
+##### `clear()`
+
+Removes all resources, and all subscriptions to them.
+
+##### `subscribe(listener: StoreSubscriber, id?: string)` / `unsubscribe(listener: StoreSubscriber, id?: string)` / `unsubscribeAll(listener: StoreSubscriber)`
+
+Manual subscriptions. A subscriber is an object with a `storeChanged(resourceStore, id?)` method. Pass an id to subscribe to a single resource. Usually, the automatic subscriptions are enough.
+
+### Other functions
+
+* `unsubscribe(store, listener)` – removes a subscriber from all resource stores in a store.
+* `seedStore(store, data)` – inserts data, an object with an array of resources for every key, into the store.
+* `serialize(store)` – the opposite of `seedStore`. Returns an object with an array of all resources for every key.
+* `clearStore(store)` – clears all resource stores in a store.
+
+## `@applicvision/frontend-friends/parse-shape`
+
+Validates unknown data, for instance JSON from a server, against a shape. The result is typed according to the shape.
+
+A shape is described with:
+
+* `String`, `Number` and `Boolean` – a value of that type.
+* `Date` and `URL` – a value which can be converted to a `Date` or a `URL`, for instance a string.
+* An array with one shape, `[shape]` – an array where every item has that shape.
+* An object, `{ key: shape }` – an object where every key has its shape. Other keys are left out.
+* [`optional(shape)`](#optionalshape) – the value can be `undefined`.
+* Another class – the data is passed to the constructor, and then assigned to the instance.
+
+If the data does not match, a `ParseShapeError` is thrown. Its `keyPath` property tells where the mismatch was found.
+
+### `parse(shape, data)`
+
+Parses the data using the shape.
+
+*Example:*
+```javascript
+import { parse, optional } from '@applicvision/frontend-friends/parse-shape'
+
+const response = await fetch('/api/books')
+const books = parse([{ id: String, title: String, published: Date, rating: optional(Number) }], await response.json())
+// books[0].published is a Date
+```
+
+### `shape(definition)`
+
+Creates a reusable shape, with a `parse(data)` method.
+
+```javascript
+const Book = shape({ id: String, title: String })
+const book = Book.parse(data)
+```
+
+### `optional(shape)`
+
+Marks a value as optional.
+
+## `@applicvision/frontend-friends/router`
+
+The router renders pages on the server and takes over navigation in the browser. Pages are put together from HTML files, *views* and *layouts*, with [islands](#island) for the dynamic parts. The islands are rendered on the server, using the data loaded by the route, and hydrated in the browser.
+
+When a link is followed, the browser only loads the part of the page which changes, and updates the islands. Going back and forward in the history restores pages without loading them again.
+
+The module exports a `Router` class. In Node.js, the [`node` export condition](https://nodejs.org/api/packages.html#conditional-exports) resolves the module to the server router. Elsewhere it resolves to the browser router. Both have the same configuration, so the router is defined in one module which is used both on the server and in the browser.
+
+> [!Note]
+> The server router requires Node.js 24 or later, since it uses [`URLPattern`](https://developer.mozilla.org/en-US/docs/Web/API/URLPattern). The browser router requires the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API).
+
+A complete example is available in [`examples/library`](https://github.com/applicvision/frontend-friends/tree/main/examples/library).
+
+### `Router.create(config: RouteConfig): Router`
+
+Creates a router. The configuration describes the root route, and its children:
+
+```typescript
+type RouteConfig = {
+    // HTML file wrapping the views of this route and its child routes
+    layout?: string
+    // HTML file for this route
+    view?: string
+    // Loads data for this route
+    load?: (get, params: Record<string, string>, query: URLSearchParams) => Promise<unknown>
+    // A resource store to put the loaded data in
+    store?: ResourceStore
+    // Child routes, by path
+    children?: { [path: string]: RouteConfig }
+}
+```
+
+The paths of the children are added to the path of the parent route. A path segment starting with `:` is a parameter. Constant paths are matched before parameters. The full path of a route, for instance `'books/:id'`, identifies the route in methods such as [`linkTo`](#linktopath-string-params-string-string). The root route has the path `''`. Every route must have at least a `layout`, a `view` or a `load` function.
+
+The file names of layouts and views are relative to the `directory` passed to [`mount`](#mountoptions-directory-string-base-string-handler) on the server.
+
+*Example:*
+```javascript
+// app/router.js
+import { Router } from '@applicvision/frontend-friends/router'
+import { store } from './store.js'
+
+const Book = { id: String, title: String, author: String }
+
+export const router = Router.create({
+    layout: 'layout.html',
+    view: 'home.html',
+    children: {
+        about: { view: 'about.html' },
+        books: {
+            layout: 'books/layout.html',
+            view: 'books/list.html',
+            load: (get, params, query) => get([Book], `/api/books?${query}`),
+            children: {
+                ':id': {
+                    view: 'books/book.html',
+                    store: store.books,
+                    load: (get, { id }) => get(Book, `/api/books/${id}`)
+                }
+            }
+        }
+    }
+})
+```
+
+The module defining the router must export it with the name `router`.
+
+### Views and layouts
+
+A page is put together from the layouts of the route and all its parents, outermost first, with the view of the route inside. A layout marks where the content goes with an outlet:
+
+```html
+<ff-outlet></ff-outlet>
+```
+
+The outermost layout should be a complete HTML document. It should also contain the `ff-router` element, which is replaced by the script starting the router in the browser. The `src` attribute is the path to the module exporting the router, relative to the layout. A path starting with `/` is relative to the router directory instead:
+
+```html
+<ff-router src="router.js"></ff-router>
+```
+
+Since the islands and the router are loaded as modules in the browser, the layout also needs an [import map](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/script/type/importmap) for `@applicvision/frontend-friends`. See [Getting started](https://github.com/applicvision/frontend-friends#cdn) in the readme. The map must resolve `@applicvision/frontend-friends/router` to the browser router, `src/router/browser-router.js`.
+
+Islands are added to views and layouts with the `ff-island` element. The `src` attribute is the path to a module, relative to the HTML file, or to the router directory if it starts with `/`. By default the default export of the module is used. Add `?name` to the path to use a named export instead.
+
+```html
+<ff-island src="islands/book-list.js"></ff-island>
+<ff-island src="islands/books.js?bookCount"></ff-island>
+```
+
+The island module is imported on the server to render the island, and in the browser to hydrate or mount it:
+
+* On a full page load, the server renders the islands and marks them with the `hydratable` attribute. In the browser, they are hydrated, so the server rendered elements are kept. The attribute is removed after hydration.
+* On client side navigation, the server only sends the HTML of the view, with empty `ff-island` elements. The islands are mounted in the browser, with the state of the browser.
+
+> [!Note]
+> When hydrating, the island must render the same content in the browser as on the server. State which only exists in the browser, such as values from `localStorage`, will not be shown until the island updates.
+
+> [!Note]
+> The router finds these elements by their exact markup. Write `<ff-outlet></ff-outlet>` and `<ff-router src="..."></ff-router>` without any content or other attributes, and do not add other attributes to `ff-island`.
+
+> [!Caution]
+> All files in the directory of the router are publicly available, since the browser imports the islands and the router from there. Do not put any secrets in it.
+
+### Loading data
+
+The `load` function of a route is called with three arguments:
+
+* `get(shape, input, init?)` – fetches JSON and parses it with [`parse`](#parseshape-data). The arguments `input` and `init` are the same as for [`fetch`](https://developer.mozilla.org/en-US/docs/Web/API/Window/fetch).
+* `params` – the parameters of the path.
+* `query` – the query parameters, as `URLSearchParams`.
+
+On the server, a relative URL passed to `get`, such as `'/api/books'`, is handled directly by the server, without going over the network. The headers of the page request, such as cookies, are passed along. Other URLs are fetched as usual.
+
+The responses fetched on the server are added to the page, so that the browser does not need to fetch them again when the router starts.
+
+The loaded data is available through [`dataFor`](#datafortpath-string). If the route has a `store`, the data is also upserted into it. The data must then be a resource with an `id`, or an array of resources.
+
+> [!Note]
+> Only the `load` function of the matched route is called, not the ones of its parents. If an island in a layout needs data, load it in the child routes, or use a store.
+
+### Rendering
+
+When rendering on the server, and when updating in the browser, the islands can read the current state of the router: [`dataFor`](#datafortpath-string), [`paramsFor`](#paramsforpath-string), [`params`](#get-params-recordstring-string), [`query`](#get-query-urlsearchparams), [`path`](#get-path-string--null), [`route`](#get-route-route--null) and [`isActive`](#isactivepath-string-boolean). Islands and elements which read these properties during rendering are updated when they change.
+
+*Example:*
+```javascript
+// app/islands/book.js
+import { island, html } from '@applicvision/frontend-friends'
+import { router } from '../router.js'
+import { store } from '../store.js'
+
+export default island(() => {
+    const { id } = router.paramsFor('books/:id')
+    const book = store.books.get(id)
+    return html`
+        <h2>${book.title}</h2>
+        <a href=${router.linkTo('books')}>All books</a>`
+})
+```
+
+> [!Note]
+> An island module is a single island instance. It can only be shown in one place at a time.
+
+### Navigation in the browser
+
+The browser router handles navigations to routes it knows, such as followed links, submitted forms using `GET` and history traversal. Navigations to other URLs are left to the browser.
+
+* **Another route** – the HTML of the view, from the nearest layout which is already on the page, is loaded from the server together with the data, and put in its outlet. The islands in the view are mounted in the browser.
+* **The same route** with other parameters or query – only the `load` function is called, in the browser, and the islands using the router are updated.
+* **Back and forward** – the previous content and data are restored from memory. Nothing is loaded.
+
+### Server
+
+#### `mount(options?: {directory?: string, base?: string}): handler`
+
+Mounts the router, and returns a request handler for a Node.js HTTP server: `(request, response, server) => Promise`.
+
+* `directory` – the directory containing the views, layouts, islands and the router module. A relative path is resolved against the working directory of the process, so passing an absolute path, such as `path.join(import.meta.dirname, 'app')`, is recommended. Default `'.'`. The files are served to the browser with paths relative to this directory.
+* `base` – an optional base path for all routes, for instance `'/app'`.
+
+The handler handles requests for the routes, and for the views and files used by the browser router (under `<base>/_ff-router/`). It responds with `404` for unknown paths under the base path. Requests outside of the base path are not handled, so other handlers can take care of them.
+
+The third argument, the server, is used for the internal requests made by `get`. If it is not passed, the server of the request socket is used.
+
+*Example:*
+```javascript
+import { createServer } from 'node:http'
+import path from 'node:path'
+import { router } from './app/router.js'
+
+const handleRoute = router.mount({ directory: path.join(import.meta.dirname, 'app'), base: '/app' })
+
+const server = createServer(async (request, response) => {
+    if (request.url.startsWith('/api/')) {
+        return handleApi(request, response)
+    }
+    await handleRoute(request, response, server)
+
+    if (!response.headersSent) {
+        response.writeHead(404).end()
+    }
+})
+
+server.listen(3000)
+```
+
+### Browser
+
+#### `mount(options?: {base?: string}): Promise`
+
+Starts the router in the browser. This is done automatically by the script which replaces `ff-router`, so it usually does not need to be called.
+
+### Common properties and methods
+
+#### `linkTo(path: string, params?: {[string]: string})`
+
+Returns the URL path for the route with the given path, including the base path. Parameters are filled in from `params`. The router must be mounted.
+
+```javascript
+router.linkTo('books/:id', { id: '2' }) // => '/app/books/2'
+```
+
+#### `dataFor<T>(path: string)`
+
+Returns the data loaded for the route with the given path, which must be the current route. With TypeScript, the type is the return type of the `load` function.
+
+#### `paramsFor(path: string)`
+
+Returns the parameters of the route with the given path, which must be the current route.
+
+#### `get params: Record<string, string>`
+
+The parameters of the current route.
+
+#### `get query: URLSearchParams`
+
+The query parameters of the current URL.
+
+#### `get path: string | null`
+
+The path of the current URL, including the base path.
+
+#### `get route: Route | null`
+
+The current route. It has the properties `path`, `parent` and `children`.
+
+#### `isActive(path: string): boolean`
+
+`true` if the route with the given path is the current route.
+
+*Example:*
+```javascript
+html`<a href=${router.linkTo('books')} aria-current=${router.isActive('books') ? 'page' : false}>Books</a>`
+```
+
+#### `get basePath: string`
+
+The base path passed to `mount`.
+
+#### `get isMounted: boolean`
+
+`true` if the router is mounted.
+
