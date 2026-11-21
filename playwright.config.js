@@ -11,5 +11,11 @@ export default defineConfig({
 		command: 'npm run serve-docs -- --no-watch --port 3001',
 		url: 'http://localhost:3001/frontend-friends/',
 		reuseExistingServer: !process.env.CI
+	},
+	{
+		command: 'npm run serve-example',
+		url: 'http://localhost:3002',
+		env: { PORT: '3002' },
+		reuseExistingServer: !process.env.CI
 	}]
 })

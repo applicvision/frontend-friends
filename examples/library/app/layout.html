@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Frontend Friends - Library</title>
+	<script type="importmap">
+		{
+			"imports": {
+				"@applicvision/frontend-friends": "/lib",
+				"@applicvision/frontend-friends/": "/lib/"
+			}
+		}
+	</script>
+	<style>
+		:root {
+			--background: #faf7f2;
+			--surface: #ffffff;
+			--text: #2b2622;
+			--muted: #75695f;
+			--accent: #9c3d2e;
+			--border: #e6dfd5;
+			--like: #c8324b;
+			color-scheme: light dark;
+			font-family: system-ui, sans-serif;
+			line-height: 1.5;
+		}
+
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--background: #1d1a17;
+				--surface: #27231f;
+				--text: #eee7de;
+				--muted: #a89c90;
+				--accent: #e58f75;
+				--border: #3a342e;
+				--like: #f06d84;
+			}
+		}
+
+		body {
+			max-width: 46rem;
+			margin: 0 auto;
+			padding: 0 1rem 3rem;
+			background: var(--background);
+			color: var(--text);
+		}
+
+		h1,
+		h2,
+		h3 {
+			font-family: Georgia, 'Times New Roman', serif;
+			font-weight: normal;
+			line-height: 1.2;
+		}
+
+		a {
+			color: var(--accent);
+		}
+
+		ff-island,
+		ff-outlet {
+			display: contents;
+		}
+
+		/* Header and navigation */
+
+		header {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 0 2rem;
+			border-bottom: 1px solid var(--border);
+			margin-bottom: 1.5rem;
+		}
+
+		header h1 {
+			margin: 1rem 0;
+		}
+
+		header nav ul {
+			display: flex;
+			gap: 1.25rem;
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+
+		header nav a {
+			color: var(--muted);
+			text-decoration: none;
+			padding-bottom: 0.25rem;
+			border-bottom: 2px solid transparent;
+		}
+
+		header nav a:hover {
+			color: var(--text);
+		}
+
+		header nav a[aria-current="page"] {
+			color: var(--text);
+			border-bottom-color: var(--accent);
+		}
+
+		/* Buttons and fields */
+
+		button,
+		input {
+			font: inherit;
+			color: inherit;
+		}
+
+		button {
+			cursor: pointer;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 999px;
+			padding: 0.25rem 0.9rem;
+		}
+
+		button:hover {
+			border-color: var(--muted);
+		}
+
+		button[aria-pressed="true"] {
+			background: var(--accent);
+			border-color: var(--accent);
+			color: var(--background);
+		}
+
+		input[type="search"] {
+			flex: 1;
+			min-width: 0;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 999px;
+			padding: 0.4rem 1rem;
+		}
+
+		form[role="search"] {
+			display: flex;
+			gap: 0.5rem;
+			margin-bottom: 1rem;
+		}
+
+		/* Book list */
+
+		ul[aria-label="Book list"],
+		ul[aria-label="Favourites"] {
+			list-style: none;
+			padding: 0;
+			display: grid;
+			gap: 0.5rem;
+		}
+
+		ul[aria-label="Book list"] li {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			align-items: center;
+			column-gap: 1rem;
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 0.5rem;
+			padding: 0.6rem 1rem;
+		}
+
+		ul[aria-label="Book list"] li a {
+			font-weight: 600;
+			text-decoration: none;
+		}
+
+		ul[aria-label="Book list"] li span {
+			grid-row: 2;
+			color: var(--muted);
+			font-size: 0.9em;
+		}
+
+		ul[aria-label="Book list"] li button {
+			grid-row: 1 / 3;
+			grid-column: 2;
+		}
+
+		/* Like buttons stay neutral, with a red heart */
+
+		button[aria-label^="Like "],
+		article button {
+			background: var(--surface);
+			border-color: var(--border);
+			color: var(--like);
+		}
+
+		button[aria-label^="Like "] {
+			border: none;
+			font-size: 1.4rem;
+			padding: 0 0.25rem;
+		}
+
+		article button[aria-pressed="true"] {
+			background: var(--like);
+			border-color: var(--like);
+			color: var(--background);
+		}
+
+		ul[aria-label="Favourites"] li::before {
+			content: '♥ ';
+			color: var(--like);
+		}
+
+		/* Book details */
+
+		article {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: 0.5rem;
+			padding: 0.5rem 1.5rem 1.5rem;
+		}
+
+		article p:first-of-type {
+			color: var(--muted);
+			margin-top: -0.5rem;
+		}
+
+		article a {
+			margin-left: 1rem;
+		}
+	</style>
+</head>
+
+<body>
+	<header>
+		<h1>Library</h1>
+		<ff-island src="islands/nav.js"></ff-island>
+	</header>
+	<main>
+		<ff-outlet></ff-outlet>
+	</main>
+	<ff-router src="router.js"></ff-router>
+</body>
+
+</html>

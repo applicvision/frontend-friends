@@ -31,7 +31,10 @@ export class RouteIslandContainer extends HTMLElement {
 	 */
 	attributeChangedCallback(attribute, oldSrc, newSrc) {
 		if (attribute == 'src' && newSrc) {
-			this.hydrate(newSrc)
+			// Islands which are part of the initial page are hydrated.
+			// Islands added later, by client side navigation, are mounted since the
+			// client state (for instance a store) may differ from the state used on the server.
+			this.#load(newSrc, isInitialPage)
 		}
 	}
 
@@ -47,8 +50,9 @@ export class RouteIslandContainer extends HTMLElement {
 
 	/**
 	 * @param {string} islandSrc
+	 * @param {boolean} hydrate
 	 */
-	async hydrate(islandSrc) {
+	async #load(islandSrc, hydrate) {
 
 		const [filePath, exportName = 'default'] = islandSrc.split('?')
 
@@ -57,7 +61,11 @@ export class RouteIslandContainer extends HTMLElement {
 
 		this.#island = island
 
-		island.hydrate(this)
+		if (hydrate) {
+			island.hydrate(this)
+		} else {
+			island.mount(this)
+		}
 		this.#internals.states.add('hydrated')
 	}
 }
@@ -86,11 +94,19 @@ export class FFOutlet extends DeclarativeElement {
 /** @type {Router|null} */
 let router = null
 
+/** True while the elements already in the document are upgraded */
+let isInitialPage = false
+
 /**
  * @param {Router} _router
  */
 export function register(_router) {
 	router = _router
-	customElements.define('ff-island', RouteIslandContainer)
-	customElements.define('ff-outlet', FFOutlet)
+	isInitialPage = true
+	try {
+		customElements.define('ff-island', RouteIslandContainer)
+		customElements.define('ff-outlet', FFOutlet)
+	} finally {
+		isInitialPage = false
+	}
 }

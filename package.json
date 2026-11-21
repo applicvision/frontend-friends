@@ -52,12 +52,12 @@
     },
     "./router": {
       "node": {
-        "default": "./src/router/server-router.js",
-        "types": "./types/src/server-router.d.ts"
+        "types": "./types/src/server-router.d.ts",
+        "default": "./src/router/server-router.js"
       },
       "default": {
-        "default": "./src/router/browser-router.js",
-        "types": "./types/src/browser-router.d.ts"
+        "types": "./types/src/browser-router.d.ts",
+        "default": "./src/router/browser-router.js"
       }
     }
   },
@@ -65,7 +65,8 @@
     "tdd": "test-browser --watch test --watch src",
     "node-test": "node --test **/*.nodetest.js",
     "node-tdd": "node --watch --test **/*.nodetest.js",
-    "serve-docs": "self-serve docs --base frontend-friends"
+    "serve-docs": "self-serve docs --base frontend-friends",
+    "serve-example": "node examples/library/server.js"
   },
   "files": [
     "src",

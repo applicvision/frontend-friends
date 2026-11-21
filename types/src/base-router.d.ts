@@ -15,6 +15,10 @@ export class BaseRouter<Routes> {
 
 	get query(): URLSearchParams
 
+	get params(): Record<string, string>
+
+	get path(): string | null
+
 	get basePath(): string
 
 	get isMounted(): boolean
