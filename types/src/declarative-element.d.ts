@@ -1,9 +1,8 @@
-import { StoreSubscriber } from "./store.js";
-import { InnerCSS, KeyPath, StyleDeclaration, TwowayBinding } from "../type-utils.js";
+import { PluginCreator, PluginStateShape, InnerCSS, KeyPath, StyleDeclaration, TwowayBinding } from "../type-utils.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
 import { twoway as TwowayFunc } from "./special-attributes.js";
 
-export abstract class DeclarativeElement<SharedState = null> extends HTMLElement implements StoreSubscriber {
+export abstract class DeclarativeElement<SharedState = null> extends HTMLElement {
 	constructor()
 
 	static sharedStateName: string | null
@@ -18,15 +17,13 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 
 	protected sharedStateChanged(): void
 
-	storeChanged(): void
-
 	get isRendering(): boolean
-
-	get isMounted(): boolean
 
 	protected componentDidUpdate(): void
 
-	reactive<T extends object>(object: T, effect?: (keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void): T
+	protected reactive<T extends object>(object: T, effect?: (keypath: KeyPath<T>, newValue: unknown, oldValue: unknown) => void): T
+
+	protected usePlugin<State extends PluginStateShape>(pluginCreator: PluginCreator<State>): State
 
 	readonly pendingUpdate: Promise<any> | null
 
@@ -37,6 +34,8 @@ export abstract class DeclarativeElement<SharedState = null> extends HTMLElement
 	set sharedState(newValue: SharedState)
 
 	connectedCallback(): void
+
+	disconnectedCallback(): void
 
 	adoptedCallback(oldDocument: Document, newDocument: Document): void
 

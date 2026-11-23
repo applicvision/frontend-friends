@@ -29,12 +29,13 @@ test('Test the todo app', async ({ page }) => {
 		.getByRole('listitem'))
 		.toContainText(['first todo', 'Another one'])
 
-	page.once('dialog', async dialog => {
-		await expect(dialog.defaultValue()).toBe('first todo')
-		await dialog.accept('Updated todo')
-	})
-
 	await page.locator('#app').getByRole('listitem').getByRole('button', { name: '✎' }).first().click()
+
+	await expect(page.getByRole('textbox', { name: 'Enter new todo' })).toHaveValue('first todo')
+
+	await page.getByRole('textbox', { name: 'Enter new todo' }).fill('Updated todo')
+
+	await page.getByRole('button', { name: 'Update' }).click()
 
 	await expect(page.locator('#app')
 		.getByRole('listitem'))

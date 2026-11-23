@@ -3,16 +3,17 @@ import expect from '@applicvision/js-toolbox/expect'
 import { spy } from '@applicvision/js-toolbox/function-spy'
 import { html, css, DeclarativeElement } from '@applicvision/frontend-friends'
 import { innerCSS } from '@applicvision/frontend-friends/declarative-element'
+import { definePlugin } from '../src/plugins.js'
 import { addTestContainer, shadowText } from './helpers.js'
+import { getStore } from '../src/store.js'
 
 
-/**
- * @param {HTMLElement} element
- * @return {HTMLElement}
- */
+/** @param {HTMLElement} element */
 function firstShadowElement(element) {
-	// @ts-ignore
-	return element.shadowRoot?.firstElementChild
+	const firstShadowElement = element.shadowRoot?.firstElementChild
+	if (!(firstShadowElement instanceof HTMLElement))
+		throw new Error('Missing shadow element')
+	return firstShadowElement
 }
 
 describe('Declarative Element component', () => {
@@ -103,9 +104,9 @@ describe('Declarative Element component', () => {
 
 	it('Should be styled', () => {
 		const element = new ColorfulElement
-		expect(element.isMounted).to.be.false()
+		expect(element.isConnected).to.be.false()
 		testContainer.replaceChildren(element)
-		expect(element.isMounted).to.be.true()
+		expect(element.isConnected).to.be.true()
 		expect(getComputedStyle(firstShadowElement(element)).backgroundColor).to.equal('rgb(0, 128, 0)')
 		expect(getComputedStyle(firstShadowElement(element)).color).to.equal('rgb(255, 255, 0)')
 		expect(getComputedStyle(firstShadowElement(element)).margin).to.equal('5px')
@@ -206,5 +207,183 @@ describe('Declarative Element component', () => {
 
 		await element.pendingUpdate
 		expect(element.selection).to.deepEqual(['a', 'b'])
+	})
+
+	it('supports custom plugins with usePlugin', async () => {
+		/** @type {string[]} */
+		const middlewareCalls = []
+		const cleanupSpy = spy()
+		/** @type {(val: string) => void} */
+		let triggerUpdate = () => { }
+
+		const customPlugin1 = definePlugin((invalidate) => {
+			const state = {
+				value: 'plugin-1-state'
+			}
+			triggerUpdate = (/** @type {string} */ val) => {
+				state.value = val
+				invalidate()
+			}
+			return {
+				state,
+				middleware(render) {
+					middlewareCalls.push('plugin-1-start')
+					render()
+					middlewareCalls.push('plugin-1-end')
+				},
+				cleanup: () => cleanupSpy()
+			}
+		})
+
+		const customPlugin2 = definePlugin(() => {
+			return {
+				state: { value: 'plugin-2-state' }
+			}
+		})
+
+		class PluginUsingElement extends DeclarativeElement {
+			plugin1State = this.usePlugin(customPlugin1)
+			plugin2State = this.usePlugin(customPlugin2)
+
+			render() {
+				return html`<div>${this.plugin1State.value} and ${this.plugin2State.value}</div>`
+			}
+		}
+
+		customElements.define('test-plugins', PluginUsingElement)
+
+		const element = new PluginUsingElement()
+		testContainer.replaceChildren(element)
+
+		expect(shadowText(element)).to.equal('plugin-1-state and plugin-2-state')
+		expect(middlewareCalls).to.deepEqual(['plugin-1-start', 'plugin-1-end'])
+
+		// Test changing state and calling invalidate internally
+		triggerUpdate('new-plugin-1-state')
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('new-plugin-1-state and plugin-2-state')
+		expect(middlewareCalls).to.deepEqual([
+			'plugin-1-start', 'plugin-1-end',
+			'plugin-1-start', 'plugin-1-end'
+		])
+
+		// Test cleanup
+		testContainer.replaceChildren()
+		expect(cleanupSpy.calls).to.equal(1)
+	})
+
+	it('element connected to store', async () => {
+		const store = getStore({
+			/** @type {{id: string, name: string}} */
+			// @ts-ignore
+			user: undefined
+		})
+
+		store.user.upsert({ id: '1', name: 'Tina' })
+
+		class ConnectedElement extends DeclarativeElement {
+			static observedAttributes = ['user-id']
+			render() {
+				const userId = this.getAttribute('user-id')
+				if (!userId) return html`Error: no id`
+
+				const user = store.user.get(userId)
+
+				if (!user) return html`Error: no user`
+
+				return html`${user.name}`
+			}
+		}
+
+		customElements.define('connected-element', ConnectedElement)
+
+		const connected = new ConnectedElement
+
+		testContainer.replaceChildren(connected)
+
+		expect(shadowText(connected)).to.equal('Error: no id')
+
+		connected.setAttribute('user-id', '1')
+
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Tina')
+
+		store.user.update('1', { name: 'Tom' })
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Tom')
+
+		testContainer.replaceChildren()
+
+		store.user.update('1', { name: 'James' })
+
+		testContainer.replaceChildren(connected)
+
+		expect(shadowText(connected)).to.equal('James')
+
+		store.user.update('1', { name: 'Mandy' })
+
+		await connected.pendingUpdate
+
+		expect(shadowText(connected)).to.equal('Mandy')
+	})
+
+	it('plugin cleanup and reactivation', async () => {
+
+		let lastDetectedKey = ''
+
+		const lastKey = definePlugin((invalidate) => {
+
+			const state = { key: '' }
+
+			const abort = new AbortController()
+			document.addEventListener('keyup', (event) => {
+				state.key = lastDetectedKey = event.key
+				invalidate()
+			}, { signal: abort.signal })
+
+			return {
+				state,
+				cleanup: () => abort.abort()
+			}
+		})
+
+		class PluginUsingElement extends DeclarativeElement {
+			lastKeyState = this.usePlugin(lastKey)
+
+			render() {
+				return html`<div>${this.lastKeyState.key}</div>`
+			}
+		}
+
+		customElements.define('test-plugin-cleanup', PluginUsingElement)
+
+		const element = new PluginUsingElement
+
+		testContainer.replaceChildren(element)
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '1' }))
+
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('1')
+
+		testContainer.replaceChildren()
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '2' }))
+
+		// Do not listen for changes when not mounted
+		expect(lastDetectedKey).to.equal('1')
+
+		testContainer.replaceChildren(element)
+
+		expect(shadowText(element)).to.equal('')
+
+		document.dispatchEvent(new KeyboardEvent('keyup', { key: '3' }))
+		await element.pendingUpdate
+
+		expect(shadowText(element)).to.equal('3')
 	})
 })

@@ -143,8 +143,8 @@ describe('Stateful component', () => {
 
 	it('should handle shared state when passed through dynamic fragment', async () => {
 		const anIsland = island(
-			() => ({ state: { active: false } }),
-			({ state }) => html`
+			{ active: false },
+			(state) => html`
 				<button onclick=${() => state.active = !state.active}>outside: ${String(state.active)}</button>
 				<test-twoway ff-share=${twoway(state, 'active')}></test-twoway>
 			`

@@ -1,7 +1,7 @@
 import { before, describe, it } from '@applicvision/js-toolbox/test'
-import { html } from '../src/dynamic-fragment.js'
+import { spy } from '@applicvision/js-toolbox/function-spy'
 import expect from '@applicvision/js-toolbox/expect'
-import { DynamicIsland, island } from '@applicvision/frontend-friends/island'
+import { html, ref, island, definePlugin } from '@applicvision/frontend-friends'
 import { getStore } from '../src/store.js'
 import { addTestContainer } from './helpers.js'
 
@@ -24,53 +24,64 @@ describe('Dynamic island', () => {
 
 	it('island connected to store', async () => {
 
-		const island = new DynamicIsland(() => ({
-			tuva: store.user.get('1')
-		}), (state) => html`<h2>name: ${state.tuva.name} age: ${state.tuva.age}</h2>`)
+		const storeIsland = island(() => {
+			const tuva = store.user.get('1')
+			return html`<h2>name: ${tuva.name} age: ${tuva.age}</h2>`
+		})
 
-		island.mount(testContainer)
+		storeIsland.mount(testContainer)
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 0')
 
 		store.user.update('1', { age: 1 })
 
-		await island.pendingUpdate
+		await storeIsland.pendingUpdate
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 1')
 
-		island.unmount()
+		storeIsland.unmount()
 
 		expect(testContainer.textContent).to.be.empty()
 	})
 
 	it('island with state', async () => {
-		const island = new DynamicIsland(() => ({
-			state: {
-				name: 'Tuva',
-				age: 0
-			}
-		}),
-			({ state }) => html`<h2>name: ${state.name} age: ${state.age}</h2>`
-		)
+		const anIsland = island({
+			name: 'Tuva',
+			age: 0
+		}, (state) => html`<h2>name: ${state.name} age: ${state.age}</h2>`)
 
-		island.mount(testContainer)
+		anIsland.mount(testContainer)
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 0')
 
-		island.state.age++
+		anIsland.state.age++
 
-		await island.pendingUpdate
+		await anIsland.pendingUpdate
 
 		expect(testContainer.textContent).to.equal('name: Tuva age: 1')
 	})
 
+	it('island with primitive state', async () => {
+		const anIsland = island(0, state => html`<p>count: ${state}`)
+
+		anIsland.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('count: 0')
+
+		anIsland.state++
+
+		anIsland.state++
+
+		await anIsland.pendingUpdate
+
+		expect(testContainer.textContent).to.equal('count: 2')
+	})
+
 	it('chained state', async () => {
 		const state = { age: 0 }
-		const island1 = island(
-			() => ({ state }), ({ state }) => html`<h2>${state.age}</h2>`
+		const island1 = island(state, (state) => html`<h2>${state.age}</h2>`
 		)
-		const island2 = island(
-			() => ({ state: island1.state }), ({ state }) => html`<h3>${state.age}</h3>`
+		const island2 = island(island1.state, (state) => html`<h3>${state.age}</h3>`
 		)
 		const div1 = document.createElement('div')
 		const div2 = document.createElement('div')
@@ -97,9 +108,8 @@ describe('Dynamic island', () => {
 
 	it('alternating fragments uses cache', async () => {
 
-		const anIsland = island(
-			() => ({ state: { loading: true } }),
-			({ state }) => {
+		const anIsland = island({ loading: true },
+			(state) => {
 				if (state.loading) {
 					return html`<div>loading...</div>`
 				}
@@ -123,5 +133,61 @@ describe('Dynamic island', () => {
 		expect(testContainer.textContent).to.equal('loading...')
 
 		expect(firstRendered).to.equal(testContainer.firstElementChild)
+	})
+
+	it('island with refs', () => {
+		const anIsland = island(
+			{ refs: { diven: ref() } },
+			({ refs }) => html`<div ff-ref=${refs.diven}>test</div>`
+		)
+		anIsland.mount(testContainer)
+
+		expect(anIsland.refs.diven.elementOrThrow).to.equal(testContainer.querySelector('div'))
+	})
+
+	it('island with plugin', async () => {
+		const middlewareSpy = spy()
+		const cleanupSpy = spy()
+		let changeState = () => { }
+		const testPlugin = definePlugin((invalidate) => {
+			const state = {
+				count: 0
+			}
+			changeState = () => {
+				state.count++
+				invalidate()
+			}
+			return {
+				middleware: (render) => {
+					middlewareSpy()
+					render()
+				},
+				state,
+				cleanup: () => cleanupSpy()
+			}
+		})
+
+		const pluginIsland = island({
+			plugins: {
+				test: testPlugin,
+			}
+		}, ({ plugins }) => html`<div>${plugins.test.count}</div>`)
+
+		pluginIsland.mount(testContainer)
+
+		expect(testContainer.textContent).to.equal('0')
+
+		expect(middlewareSpy.calls).to.equal(1)
+
+		changeState()
+
+		await pluginIsland.pendingUpdate
+
+		expect(middlewareSpy.calls).to.equal(2)
+		expect(testContainer.textContent).to.equal('1')
+
+		pluginIsland.unmount()
+
+		expect(cleanupSpy.calls).to.equal(1)
 	})
 })
