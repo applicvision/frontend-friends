@@ -49,6 +49,16 @@
     "./attribute-helpers": {
       "types": "./types/src/attribute-helpers.d.ts",
       "default": "./src/attribute-helpers.js"
+    },
+    "./router": {
+      "node": {
+        "types": "./types/src/server-router.d.ts",
+        "default": "./src/router/server-router.js"
+      },
+      "default": {
+        "types": "./types/src/browser-router.d.ts",
+        "default": "./src/router/browser-router.js"
+      }
     }
   },
   "scripts": {
