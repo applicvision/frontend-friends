@@ -49,6 +49,7 @@ h1 {
 	font-size: larger;
 
 	ul {
+		padding: 0;
 		list-style: none;
 	}
 

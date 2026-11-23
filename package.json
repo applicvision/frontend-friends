@@ -34,6 +34,10 @@
       "types": "./types/src/store.d.ts",
       "default": "./src/store.js"
     },
+    "./plugins": {
+      "types": "./types/src/plugins.d.ts",
+      "default": "./src/plugins.js"
+    },
     "./parse-shape": {
       "types": "./types/src/parse-shape.d.ts",
       "default": "./src/parse-shape.js"
@@ -45,12 +49,7 @@
     "./attribute-helpers": {
       "types": "./types/src/attribute-helpers.d.ts",
       "default": "./src/attribute-helpers.js"
-    },
-    "./router": "./src/router/router.js",
-    "./base-router": "./src/router/base-router.js",
-    "./browser-router": "./src/router/browser-router.js",
-    "./router/dynamic-island": "./src/router/dynamic-island.js",
-    "./router/router-link": "./src/router/router-link.js"
+    }
   },
   "scripts": {
     "tdd": "test-browser --watch test --watch src",

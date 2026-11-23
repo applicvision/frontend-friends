@@ -1,4 +1,5 @@
-import type { DynamicFragment, PropertySetter, } from './src/dynamic-fragment.d.ts'
+import type { DynamicFragment, PropertySetter } from './src/dynamic-fragment.d.ts'
+import type { ElementReference } from './src/special-attributes.d.ts'
 
 export type SpecialAttribute<ValueType, ElementType extends Element> = {
 	isElementValid?: (element: Element) => element is ElementType,
@@ -68,3 +69,43 @@ export type KeyPath<T extends object> = T extends Map<any, any> ? [`Map[${string
 	{ [K in keyof T]:
 		[K, ...(T[K] extends object ? KeyPath<T[K]> : [])]
 	}[keyof T]
+
+export type Prettify<T> = {
+	[K in keyof T]: T[K];
+} & {}
+
+type UnionObject<State, Refs, Plugins> =
+	(State extends undefined ? {} : { state: State }) &
+	(Refs extends undefined ? {} : { refs: Refs }) &
+	(Plugins extends undefined ? {} : { plugins: Prettify<PluginsState<Plugins>> })
+
+
+export type StateShape = object | string | number | boolean | undefined
+export type RefsShape = { [key: string]: ElementReference } | undefined
+export type PluginsShape = { [key: string]: PluginCreator<PluginStateShape> } | undefined
+
+export type RenderContext<State extends StateShape, Refs extends RefsShape, Plugins extends PluginsShape> =
+	[Plugins, Refs] extends [undefined, undefined] ? State :
+	Prettify<UnionObject<State, Refs, Plugins>>
+
+export type UnionToIntersection<U> =
+	(U extends any ? (k: U) => void : never) extends ((k: infer I) => void) ? I : never;
+
+
+
+/** Plugin types */
+
+export type PluginStateShape = object | undefined
+
+type PluginStateFromCreator<T> = T extends (...args: any[]) => FFPlugin<infer State> ? State : never
+
+export type PluginsState<T> = { [K in keyof T as PluginStateFromCreator<T[K]> extends undefined ? never : K]: PluginStateFromCreator<T[K]> }
+
+export type PluginCreator<T extends PluginStateShape = PluginStateShape> = (invalidate: () => void, element: Element | null) => FFPlugin<T>
+
+export interface FFPlugin<T extends PluginStateShape = PluginStateShape> {
+	state?: T
+	middleware?: (render: () => void) => void
+	cleanup?: () => void
+}
+
