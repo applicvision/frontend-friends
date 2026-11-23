@@ -8,6 +8,9 @@
     "target": "ESNext",
     "strict": true,
     "noImplicitAny": true,
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "types": [
+      "node"
+    ]
   }
 }
