@@ -66,7 +66,7 @@
     "node-test": "node --test **/*.nodetest.js",
     "node-tdd": "node --watch --test **/*.nodetest.js",
     "serve-docs": "self-serve docs --base frontend-friends",
-    "build-types": "tsc -p tsconfig.types.json"
+    "serve-example": "node examples/library/server.js"
   },
   "files": [
     "src",
