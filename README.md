@@ -1,4 +1,4 @@
-# Frontend Friends &nbsp;&nbsp;&nbsp; [![Tests](https://github.com/applicvision/frontend-friends/actions/workflows/test.yml/badge.svg)](https://github.com/applicvision/frontend-friends/actions/workflows/test.yml) [![NPM Version](https://img.shields.io/npm/v/%40applicvision%2Ffrontend-friends)](https://www.npmjs.com/package/@applicvision/frontend-friends) [![install size](https://packagephobia.com/badge?p=@applicvision/frontend-friends@latest)](https://packagephobia.com/result?p=@applicvision/frontend-friends@latest)
+# Frontend Friends &nbsp;&nbsp;&nbsp; [![Tests](https://github.com/applicvision/frontend-friends/actions/workflows/test.yml/badge.svg)](https://github.com/applicvision/frontend-friends/actions/workflows/test.yml) [![NPM Version](https://img.shields.io/npm/v/%40applicvision%2Ffrontend-friends)](https://www.npmjs.com/package/@applicvision/frontend-friends) [![Unpacked size](https://img.shields.io/npm/unpacked-size/%40applicvision%2Ffrontend-friends)](https://www.npmjs.com/package/@applicvision/frontend-friends)
 
 
 
