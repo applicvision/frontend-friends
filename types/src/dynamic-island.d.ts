@@ -1,21 +1,25 @@
-import { AutoSubscriber, ResourceStore } from "./store.js";
 import { DynamicFragment } from "./dynamic-fragment.js";
+import { StateShape, RefsShape, PluginsShape, RenderContext } from "../type-utils.js";
 
-export class DynamicIsland<T extends { [key: string]: any, state?: object }> extends EventTarget implements AutoSubscriber {
-	constructor(setup: () => T, renderFunction: (state: T) => DynamicFragment)
+type PlainIslandState<T> = T extends object ? T & { refs?: never, plugins?: never } : T
+
+export class DynamicIsland<State extends StateShape = undefined, Refs extends RefsShape = undefined, Plugins extends PluginsShape = undefined> extends EventTarget {
+	constructor(
+		properties: { state?: State, refs?: Refs, plugins?: Plugins },
+		renderFunction: (context: RenderContext<State, Refs, Plugins>) => DynamicFragment)
 
 	readonly pendingUpdate: Promise<any> | null
 	invalidate(): Promise<any>
 
-	storeChanged: (store: ResourceStore<any>) => void
+	set state(state: State)
 
-	subscriptions: Set<ResourceStore<any>>
+	get state(): State
 
-	set state(state: T['state'])
-
-	get state(): T['state']
+	get refs(): Refs
 
 	mount(container: HTMLElement): void
+
+	get isMounted(): Boolean
 
 	get container(): HTMLElement | null
 
@@ -24,17 +28,21 @@ export class DynamicIsland<T extends { [key: string]: any, state?: object }> ext
 	get hydratable(): string
 
 	unmount(cacheFragment?: boolean): void
-
 }
 
 export function island(
 	render: () => DynamicFragment
-): DynamicIsland<{}>
-export function island<T extends { state?: object }>(
-	setup: () => T,
+): DynamicIsland
+export function island<
+	State extends StateShape = undefined,
+	Refs extends RefsShape = undefined,
+	Plugins extends PluginsShape = undefined
+>(
+	properties: { state?: State } & ({ refs: Refs, plugins?: Plugins } | { refs?: Refs, plugins: Plugins }),
+	render: (context: RenderContext<State, Refs, Plugins>) => DynamicFragment
+
+): DynamicIsland<State, Refs, Plugins>
+export function island<T extends object | string | number | boolean>(
+	initialState: PlainIslandState<T>,
 	render: (state: T) => DynamicFragment
-): DynamicIsland<T>
-export function island<T extends { state?: object }>(
-	setupOrRender: () => DynamicFragment | (() => T),
-	renderFunction?: (state: T) => DynamicFragment
 ): DynamicIsland<T>

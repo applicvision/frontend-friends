@@ -1,139 +1,187 @@
-import { seedStore } from '@applicvision/frontend-friends/store'
-import { BaseRouter } from '@applicvision/frontend-friends/base-router'
-import { register as registerIslandComponent } from '@applicvision/frontend-friends/router/dynamic-island'
-import { register as registerRouterLink } from '@applicvision/frontend-friends/router/router-link'
+import { BaseRouter } from './base-router.js'
+import { FFOutlet, register } from './router-elements.js'
 
-/** @import {AnyRoute} from '@applicvision/frontend-friends/base-router' */
+/**
+ * @import {Route} from './base-router.js' 
+ **/
 
-/** @extends BaseRouter<any> */
 export class Router extends BaseRouter {
 
-	/** @type {{[key: string]: string}} */
-	#viewCache = {}
+	/** @type {Record<string, FFOutlet>} */
+	#outlets = {}
 
-	/**
-	 * @param {string} view
-	 */
-	async #loadViewFile(view) {
-		if (!this.#viewCache[view]) {
-			const path = `${this.viewDirectory}/${view}`
-			const response = await fetch(path)
+	/** @param {FFOutlet} outlet */
+	registerOutlet(outlet) {
+		this.#outlets[outlet.owner] = outlet
+	}
 
-			this.#viewCache[view] = await response.text()
-		}
-		return this.#viewCache[view]
+	/** @param {FFOutlet} outlet */
+	unregsiterOutlet(outlet) {
+		delete this.#outlets[outlet.owner]
 	}
 
 	/**
-	 * @param {PopStateEvent} event
-	 */
-	async #handlePopState(event) {
-		const { route: previousRoute } = this
-		this.resolve(location.pathname)
-		if (this.route != previousRoute) {
-			await this.loadView(previousRoute)
-		}
-		// @ts-ignore
-		this.route._setData(event.state)
-	}
-
-	/**
-	 * @param {string} destination
-	 */
-	async transitionTo(destination) {
-		const { route: previousRoute, path: previousPath } = this
-
-		if (!this.resolve(destination)) {
-			// console.log('not found, handle')
-			return
-		}
-
-		if (previousPath != destination) {
-			history.pushState(null, '', destination)
-		}
-
-		if (previousRoute != this.route) {
-			await this.loadView(previousRoute)
-		}
-		const routeData = await this.loadRoute()
-
-		history.replaceState(routeData, '')
-	}
-
-	/**
-	 * @param {AnyRoute?} previousRoute
-	 */
-	async loadView(previousRoute) {
+	 * @param {NavigationHistoryEntry?} leavingEntry 
+	 * @param {AbortSignal} signal
+	 **/
+	async #load(leavingEntry, signal) {
 
 		if (!this.route) throw new Error('Can not load view because there is no current route')
 
-		/** @type {AnyRoute|null} */
-		let commonParent = null
-		let index = 0
-		while (
-			previousRoute &&
-			index < this.route.parentChain.length &&
-			index < previousRoute.parentChain.length &&
-			previousRoute.parentChain[index] == this.route.parentChain[index]
-		) {
-			commonParent = this.route.parentChain[index]
-			index += 1
+		/** @type {FFOutlet|null} */
+		let outlet = null
+		/** @type {Route|null} */
+		let route = this.route
+		while (!outlet && route) {
+			outlet = this.#outlets[route.path]
+			route = route.parent
 		}
 
-		/** @type {Element?} */
-		let container = null
-		/** @type {AnyRoute[]?} */
-		let routeChainToLoad = null
+		if (!outlet) throw new Error('Could not find outlet')
 
-		if (commonParent) {
-			container = document.querySelector(`router-outlet[owner="${commonParent.view}"]`)
-			routeChainToLoad = this.route.parentChain.slice(index).concat(this.route)
-		} else if (this.baseView) {
-			container = document.querySelector(`router-outlet[owner="${this.baseView}"]`)
-			routeChainToLoad = this.route.parentChain.concat(this.route)
-		}
+		const params = new URLSearchParams()
 
-		if (!(container && routeChainToLoad)) {
-			// console.log('Ooops, dont know where to put view')
-			throw new Error('Can not render')
+		params.set('query', this.query.toString())
+		params.set('params', JSON.stringify(this.params))
+		params.append('parent', outlet.owner)
 
-		}
+		const response = await fetch(`${this.basePath}/_ff-router/view/${this.route.path}?${params}`, { signal })
 
-		container.innerHTML = ''
+		if (!response.ok) throw new Error('Could not load view')
 
-		container.toggleAttribute('dynamic', true)
-		const viewHtml = await Promise.all(routeChainToLoad.map(route => this.#loadViewFile(route.view)))
-		const template = document.createElement('template')
-		/** @type {Element?} */
-		let nextOutlet = container
-		viewHtml.forEach((view, index) => {
-			template.innerHTML = view
-			let routerOutlet = null
-			if (index < viewHtml.length - 1) {
-				routerOutlet = template.content.querySelector('router-outlet')
+		/** @type {{view: string, data: unknown}} */
+		const { view, data } = await response.json()
 
-				routerOutlet?.setAttribute('owner', routeChainToLoad[index].view)
-				routerOutlet?.toggleAttribute('dynamic', true)
-			}
-			nextOutlet?.appendChild(template.content)
-			nextOutlet = routerOutlet
-		})
+		this.#clearOutlet(outlet, leavingEntry)
+
+		this.setData(data)
+		outlet.innerHTML = view
 	}
 
 	/**
-	 * @param {string} path
+	 * 
+	 * @param {unknown} data
+	 * @param {{ skipStore?: boolean }} [options]
 	 */
-	async mount(path) {
-		this.resolve(path)
-		/** @type {{route: any, store: any}} */
-		const initialData = JSON.parse(document.getElementById('routedata')?.textContent ?? '')
-		// @ts-ignore
-		this.route._setData(initialData.route)
-		registerIslandComponent(this.viewDirectory)
-		registerRouterLink(this)
-		seedStore(this.store, initialData.store)
-		onpopstate = this.#handlePopState.bind(this)
-		history.replaceState(initialData.route, '')
+	setData(data, options) {
+		super.setData(data, options)
+		const { currentEntry } = navigation
+		if (currentEntry && !this.#dataCache.has(currentEntry.id)) {
+			this.#dataCache.set(currentEntry.id, data)
+			currentEntry.addEventListener('dispose', () => this.#dataCache.delete(currentEntry.id))
+		}
+		this.notifySubscribers()
+	}
+
+	/** @type {Map<string, {fragment:DocumentFragment, outlet: FFOutlet}>} */
+	#domCache = new Map()
+
+	/** @type {Map<string, unknown>} */
+	#dataCache = new Map()
+
+	/**
+	 * @param {FFOutlet} outlet
+	 * @param {NavigationHistoryEntry?} entry
+	 */
+	#clearOutlet(outlet, entry) {
+		const range = document.createRange()
+		range.selectNodeContents(outlet)
+		const fragment = range.extractContents()
+		if (entry) {
+			this.#domCache.set(entry.id, { fragment, outlet })
+			entry.addEventListener('dispose', () => this.#domCache.delete(entry.id), { once: true })
+		}
+	}
+
+	/** @param {NavigateEvent} event */
+	async #loadRouteData(event) {
+		if (this.#dataCache.has(event.destination.id)) {
+			const cachedData = this.#dataCache.get(event.destination.id)
+			// Do not set stale data to the store.
+			// It might have been written to later.
+			this.setData(cachedData, { skipStore: true })
+		} else {
+			const data = await this.loadRoute()
+			if (event.signal.aborted) return
+			this.setData(data)
+		}
+	}
+
+
+	/** @param {{base?: string}|undefined} options */
+	async mount(options = {}) {
+		super.mount(options)
+
+		const dataTransferElement = document.getElementById('ff-router-data')
+
+		/** @type {Record<string, string>} */
+		const dataTransfer = {}
+		if (dataTransferElement) {
+			Object.assign(dataTransfer, JSON.parse(dataTransferElement.textContent))
+			dataTransferElement.remove()
+		}
+
+		this.resolveAndUpdate(new URL(location.href))
+
+		this.setRequestCache(dataTransfer)
+
+		this.setData(await this.loadRoute())
+
+		this.clearRequestCache()
+
+		register(this)
+
+		navigation.addEventListener('navigate', (event) => {
+
+			if (
+				!event.canIntercept ||
+				event.hashChange ||
+				event.formData != null ||
+				// A reload should load the whole page, also when used as fallback below
+				event.navigationType == 'reload' ||
+				event.downloadRequest != null
+			) {
+				return
+			}
+
+			const previousRoute = this.route
+
+			this.resolveAndUpdate(new URL(event.destination.url))
+
+			if (!this.route) return
+
+			const leavingEntry = navigation.currentEntry
+
+			event.intercept({
+				handler: async () => {
+
+					// Same route navigation
+					if (previousRoute == this.route) {
+						await this.#loadRouteData(event)
+						return
+					}
+
+					const cachedDom = this.#domCache.get(event.destination.id)
+
+					if (cachedDom && cachedDom.outlet.isConnected) {
+						const { fragment, outlet } = cachedDom
+						this.#clearOutlet(outlet, leavingEntry)
+						await this.#loadRouteData(event)
+						outlet.appendChild(fragment)
+						this.#domCache.delete(event.destination.id)
+						return
+					}
+
+					try {
+						await this.#load(leavingEntry, event.signal)
+					} catch (err) {
+						console.log(err)
+						// Fall back to a full page load, unless a new navigation has taken over
+						if (!event.signal.aborted) location.reload()
+					}
+				}
+			})
+		})
 	}
 }
 

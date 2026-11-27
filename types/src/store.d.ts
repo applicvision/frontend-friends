@@ -1,20 +1,20 @@
 
-export type StoreSubscriber = { storeChanged: (store: ResourceStore<any>) => void }
+export type StoreSubscriber = { storeChanged: (store: ResourceStore<any>, resourceId?: string) => void }
 
-export type AutoSubscriber = StoreSubscriber & { subscriptions: Set<ResourceStore<any>> }
+export type AutoSubscriber = StoreSubscriber & { subscriptions: Map<ResourceStore<any>, Set<string | symbol>> }
 
 export type AnyStore = ResourceStore<any>
 
 declare class ResourceStore<T extends { [key: string]: any }> {
 	constructor(name: string)
 
-	get(id: string, subscriber?: StoreSubscriber): T
+	get(id: string): T
 
-	subscribe(id: string, listener: StoreSubscriber): void
+	subscribe(listener: StoreSubscriber, id?: string): void
 
 	unsubscribeAll(listener: StoreSubscriber): void
 
-	unsubscribe(id: string, listener: StoreSubscriber): void
+	unsubscribe(listener: StoreSubscriber, id?: string): void
 
 	update(id: string, updates: Partial<T>): T
 
@@ -31,20 +31,20 @@ declare class ResourceStore<T extends { [key: string]: any }> {
 	clear(): void
 }
 
-type StoreType<T> = T extends abstract new (...args: any) => any ? InstanceType<T> : T
+type StoreType<T> = T extends new (...args: any) => any ? InstanceType<T> : T
 
 export function getStore<T extends { [key: string]: any }>(template: T): { [key in keyof T]: ResourceStore<StoreType<T[key]>> }
 
 export function unsubscribe(store: ReturnType<typeof getStore>, listener: StoreSubscriber): void
 
-export function autoSubscribe<T>(subscriber: AutoSubscriber, callback: () => T): T
+export function autoSubscribe(subscriber: AutoSubscriber, callback: () => void): void
+
+export function clearSubscriber(subscriber: AutoSubscriber): void
 
 export function seedStore(store: { [key: string]: ResourceStore<any> }, data: any): void
 
 export function clearStore(store: { [key: string]: ResourceStore<any> }): void
 
-export function serialize<T extends {
-	[key: string]: ResourceStore<any>;
-}>(store: T): { [key in keyof T]: T[key] extends ResourceStore<infer Type> ? Type[] : never; }
+export function serialize<T extends Record<string, ResourceStore<any>>>(store: T): { [key in keyof T]: T[key] extends ResourceStore<infer Type> ? Type[] : never; }
 
 export type { ResourceStore }

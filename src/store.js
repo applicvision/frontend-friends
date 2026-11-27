@@ -1,7 +1,8 @@
 /** @import {StoreSubscriber, AutoSubscriber} from '../types/src/store.js' */
 
+const anyChangeSubscriptionName = Symbol.for('all')
 
-/** @template {{[key: string]: any}} T */
+/** @template {object} T */
 class ResourceStore {
 	/** @type {{[id: string]: T}} */
 	#state = {}
@@ -21,37 +22,66 @@ class ResourceStore {
 
 	/**
 	 * @param {string} id
-	 * @param {StoreSubscriber=} subscriber
 	 */
-	get(id, subscriber) {
-		if (subscriber) {
-			this.subscribe(id, subscriber)
-		} else if (autoSubscriber) {
-			this.subscribe(id, autoSubscriber)
-			autoSubscriber.subscriptions.add(this)
-		}
+	get(id) {
+		this.#handleSubscriptions(id)
 		return this.#state[id]
 	}
 
+	/** @param {string} [resourceId] */
+	#handleSubscriptions(resourceId) {
+		const subscriber = autoSubscribers.at(-1)
+		if (subscriber) {
+			this.subscribe(subscriber, resourceId)
+			// Can be replaced with getOrInsert
+			let storeSubscriptions = subscriber.subscriptions.get(this)
+			if (!storeSubscriptions) {
+				storeSubscriptions = new Set()
+				subscriber.subscriptions.set(this, storeSubscriptions)
+			}
+			storeSubscriptions.add(resourceId ?? anyChangeSubscriptionName)
+		}
+	}
+
+	/** @type {Set<StoreSubscriber>} */
+	#anyChangeSubscribers = new Set()
+
+	/** @param {string} [resourceId] */
+	#notifySubscribers(resourceId) {
+		if (resourceId) {
+			this.#subscribers[resourceId]?.forEach(subscriber => subscriber.storeChanged(this, resourceId))
+		}
+		this.#anyChangeSubscribers.forEach(subscriber => subscriber.storeChanged(this))
+	}
+
 	/**
-	 * @param {string} id
 	 * @param {StoreSubscriber} listener
+	 * @param {string} [resourceId]
 	 */
-	subscribe(id, listener) {
-		(this.#subscribers[id] ??= new Set()).add(listener)
+	subscribe(listener, resourceId) {
+		if (resourceId) {
+			(this.#subscribers[resourceId] ??= new Set()).add(listener)
+		} else {
+			this.#anyChangeSubscribers.add(listener)
+		}
 	}
 
 	/** @param {StoreSubscriber} listener */
 	unsubscribeAll(listener) {
-		Object.keys(this.#subscribers).forEach(resourceId => this.unsubscribe(resourceId, listener))
+		Object.keys(this.#subscribers).forEach(resourceId => this.unsubscribe(listener, resourceId))
+		this.unsubscribe(listener)
 	}
 
 	/**
-	 * @param {string} id
 	 * @param {StoreSubscriber} listener
+	 * @param {string} [resourceId]
 	 */
-	unsubscribe(id, listener) {
-		this.#subscribers[id]?.delete(listener)
+	unsubscribe(listener, resourceId) {
+		if (resourceId) {
+			this.#subscribers[resourceId]?.delete(listener)
+		} else {
+			this.#anyChangeSubscribers.delete(listener)
+		}
 	}
 
 	/**
@@ -60,7 +90,7 @@ class ResourceStore {
 	 */
 	update(id, updates) {
 		const result = Object.assign(this.#state[id], updates)
-		this.#subscribers[id]?.forEach(subscriber => subscriber.storeChanged(this))
+		this.#notifySubscribers(id)
 		return result
 	}
 
@@ -91,12 +121,12 @@ class ResourceStore {
 			if (entry instanceof Array) {
 				return entry.map(newEntry =>
 					this.#state[newEntry.id] ?
-						this.update(newEntry.id, /** @type {T} */(/** @type {unknown} */(newEntry))) :
+						this.update(newEntry.id, newEntry) :
 						this.insertWithId(newEntry.id, /** @type {T} */(/** @type {unknown} */(newEntry)))
 				)
 			}
 			return this.#state[entry.id] ?
-				this.update(entry.id, /** @type {T} */(/** @type {unknown} */(entry))) :
+				this.update(entry.id, entry) :
 				this.insertWithId(entry.id, /** @type {T} */(/** @type {unknown} */(entry)))
 		})
 	}
@@ -112,9 +142,10 @@ class ResourceStore {
 		if (this.#state[id]) {
 			throw new Error(`Resource of type ${this.#name} with id ${id} already exists`)
 		}
+
 		const result = this.#state[id] = newEntry
 
-		this.#subscribers[id]?.forEach(subscriber => subscriber.storeChanged(this))
+		this.#notifySubscribers(id)
 
 		return result
 	}
@@ -122,21 +153,25 @@ class ResourceStore {
 	/** @param {string} id */
 	delete(id) {
 		delete this.#state[id]
+		this.#notifySubscribers(id)
 	}
 
 	getAll() {
+		this.#handleSubscriptions()
 		return Object.values(this.#state)
 	}
 
 	clear() {
+		const ids = Object.keys(this.#state)
 		this.#state = {}
-		this.#subscribers = {}
+		ids.forEach(id => this.#subscribers[id]?.forEach(subscriber => subscriber.storeChanged(this, id)))
+		this.#anyChangeSubscribers.forEach(subscriber => subscriber.storeChanged(this))
 	}
 }
 
 /**
  * @template {any} T
- * @typedef {T extends abstract new (...args: any) => any ? InstanceType<T> : T} StoreType
+ * @typedef {T extends new (...args: any) => any ? InstanceType<T> : T} StoreType
  */
 
 /** 
@@ -160,20 +195,33 @@ export function unsubscribe(store, listener) {
 	Object.values(store).forEach(resourceStore => resourceStore.unsubscribeAll(listener))
 }
 
-/** @type {AutoSubscriber | null} */
-let autoSubscriber = null
+/** @type {AutoSubscriber[]} */
+const autoSubscribers = []
 
 
 /**
- * @template T
  * @param {AutoSubscriber} subscriber
- * @param {() => T} callback
+ * @param {Function} callback
  */
 export function autoSubscribe(subscriber, callback) {
-	autoSubscriber = subscriber
-	const returnValue = callback()
-	autoSubscriber = null
-	return returnValue
+	autoSubscribers.push(subscriber)
+	try {
+		callback()
+	} finally {
+		autoSubscribers.pop()
+	}
+}
+
+/**
+ * @param {AutoSubscriber} subscriber
+ */
+export function clearSubscriber(subscriber) {
+	subscriber.subscriptions.entries().forEach(([store, ids]) => {
+		ids.forEach(id => typeof id == 'string' ?
+			store.unsubscribe(subscriber, id) :
+			store.unsubscribe(subscriber))
+	})
+	subscriber.subscriptions.clear()
 }
 
 /**

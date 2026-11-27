@@ -1,97 +1,80 @@
-import { html } from '@applicvision/frontend-friends/dynamic-fragment'
-import { autoSubscribe as storeSubscribe } from '@applicvision/frontend-friends/store'
-import { autoSubscribe as routeSubscribe } from '@applicvision/frontend-friends/base-router'
 import { deepWatch } from '@applicvision/frontend-friends/deep-watch'
+import { routerPlugin, runWithPlugins, storePlugin } from './plugin-helpers.js'
 
 /**
  * @import {DynamicFragment} from '../types/src/dynamic-fragment.js'
- * @import {AutoSubscriber, AnyStore as ResourceStore} from '../types/src/store.js'
- * @import {RouteSubscriber, AnyRoute} from './router/base-router.js'
+ * @import {FFPlugin, StateShape, RefsShape, PluginsShape, RenderContext} from '../types/type-utils.js'
  */
 
 /**
- * @template {{[key: string]: any, state?: object}} T
- * @implements {AutoSubscriber}
- * @implements {RouteSubscriber}
+ * @template {StateShape} [State=undefined]
+ * @template {RefsShape} [Refs=undefined]
+ * @template {PluginsShape} [Plugins=undefined]
  **/
 export class DynamicIsland extends EventTarget {
 
 	/** @type {HTMLElement?} */
 	#container = null
 
-	/** @type {Omit<T, "state">?} */
-	#renderProps = null
+	/** @type {State | undefined} */
+	#state
 
-	/** @type {T['state']?} */
-	#state = null
+	/** @type {Refs | undefined} */
+	#refs
 
-	/** @type {Set<ResourceStore>} */
-	subscriptions = new Set()
+	/** @type {{[key: string]: FFPlugin}} */
+	#plugins = {}
 
-	/** @type {AnyRoute | null} */
-	routeSubscription = null
+	/** @type {Plugins | undefined} */
+	#pluginCreators
 
 	#render
 
-	#setup
-
 	/**
-	 * @param {() => T} setup
-	 * @param {((state: T) => ReturnType<html>)} renderFunction
+	 * @param {{state?: State, refs?: Refs, plugins?: Plugins}} init
+	 * @param {((context: RenderContext<State, Refs, Plugins>) => DynamicFragment)} renderFunction
 	 */
-	constructor(setup, renderFunction) {
+	constructor(init, renderFunction) {
 		super()
+		this.#state = this.#watchedState(init.state)
+		this.#refs = init.refs
+		this.#pluginCreators = init.plugins
 		this.#render = renderFunction
-		this.#setup = setup
-
-		this.#reactiveSetup()
 	}
 
 	/** @type {Promise<any>|null} */
 	pendingUpdate = null
 	invalidate() {
 		return this.pendingUpdate ??= Promise.resolve().then(() => {
-			// console.time('render')
 			this.#internalRender()
-			// console.timeEnd('render')
 			this.pendingUpdate = null
 			// TODO: maybe signal update
 		})
 	}
 
-	storeChanged() {
-		this.invalidate()
-	}
-
-	routeChanged() {
-		const { state, ...otherProps } = this.#setup()
-		this.#renderProps = otherProps
-		this.state = state
-		this.#internalRender()
-	}
-
-	set state(state) {
-		this.#state = deepWatch(state ?? {}, (keypath, newValue, oldValue) => {
+	/** @param {State | undefined} state */
+	#watchedState(state) {
+		return typeof state == 'object' && state != null ? deepWatch(state, (keypath, newValue, oldValue) => {
 			if (newValue !== oldValue) {
 				this.invalidate()
 				this.dispatchEvent(new CustomEvent('statechange', { detail: { keypath } }))
 			}
-		})
+		}) : state
 	}
 
-	/** @type {T['state']} */
+	set state(state) {
+		this.#state = this.#watchedState(state)
+		if (this.isMounted) {
+			this.invalidate()
+		}
+	}
+
 	get state() {
-		// @ts-ignore
 		return this.#state
 	}
 
-	#reactiveSetup() {
-		const { state, ...otherProps } = routeSubscribe(
-			this,
-			() => storeSubscribe(this, this.#setup))
-
-		this.#renderProps = otherProps
-		this.state = state
+	get refs() {
+		return this.#refs
 	}
 
 	/** @param {HTMLElement} container */
@@ -106,33 +89,87 @@ export class DynamicIsland extends EventTarget {
 		}
 		this.#container = container
 
+		this.#registerPlugins()
 		this.#internalRender()
 		this.dispatchEvent(new Event('mount'))
+	}
+
+	#registerPlugins() {
+		const container = this.#container
+		const invalidate = this.invalidate.bind(this)
+		if (this.#pluginCreators) {
+			for (const pluginName in this.#pluginCreators) {
+				this.#plugins[pluginName] = this.#pluginCreators[pluginName](invalidate, container)
+			}
+		}
+		this.#plugins._store = storePlugin(invalidate, container)
+		this.#plugins._router = routerPlugin(invalidate, container)
 	}
 
 	get container() {
 		return this.#container
 	}
 
+	get isMounted() {
+		return Boolean(this.container)
+	}
+
 	/**
 	 * @param {HTMLElement} container
 	 **/
 	hydrate(container) {
-
-		this.#reactiveSetup()
-
-		/** @type {T} */
-		// @ts-ignore
-		const renderArg = { ...this.#renderProps, state: this.state }
-
-		const dynamicFragment = this.#render(renderArg)
+		this.#container = container
+		this.#registerPlugins()
+		const dynamicFragment = this.#renderWithPlugins()
 		dynamicFragment.hydrate(container)
 		this.#currentFragment = dynamicFragment
-		this.#container = container
+	}
+
+	get #renderArg() {
+
+		let pluginState,
+			refs = this.#refs
+
+		if (this.#pluginCreators) {
+			for (const pluginName in this.#pluginCreators) {
+				const { state } = this.#plugins[pluginName]
+				if (state !== undefined) {
+
+					pluginState ??= /** @type {Record<string, any>} */({})
+					pluginState[pluginName] = state
+				}
+			}
+		}
+
+		if (!pluginState && !refs)
+			return /** @type {RenderContext<State, Refs, Plugins>} */ (this.state)
+
+
+		const arg = {}
+
+		if (this.state !== undefined) {
+			arg.state = this.state
+		}
+
+		if (pluginState) {
+			arg.plugins = pluginState
+		}
+
+		if (refs) {
+			arg.refs = refs
+		}
+
+		return /** @type {RenderContext<State, Refs, Plugins>}*/(arg)
 	}
 
 	get hydratable() {
-		return this.#render(this.#setup()).toString()
+		this.#registerPlugins()
+		try {
+			return this.#renderWithPlugins().toString()
+		} finally {
+			Object.values(this.#plugins ?? {}).forEach(plugin => plugin.cleanup?.())
+			this.#plugins = {}
+		}
 	}
 
 
@@ -143,11 +180,8 @@ export class DynamicIsland extends EventTarget {
 			this.#fragmentCache.clear()
 		}
 
-		// remove subscriptions
-		this.subscriptions.forEach(store => store.unsubscribeAll(this))
-		this.routeSubscription?.unsubscribe(this)
-		this.subscriptions.clear()
-		this.routeSubscription = null
+		Object.values(this.#plugins ?? {}).forEach(plugin => plugin.cleanup?.())
+		this.#plugins = {}
 
 		if (this.container) {
 			this.container.innerHTML = ''
@@ -165,16 +199,20 @@ export class DynamicIsland extends EventTarget {
 	/** @type {Map<TemplateStringsArray, DynamicFragment>} */
 	#fragmentCache = new Map()
 
+
+	#renderWithPlugins() {
+		return runWithPlugins(this.#plugins, this.#render, null, this.#renderArg)
+	}
+
 	/** @type {DynamicFragment?} */
 	#currentFragment = null
 	#internalRender() {
-		if (!this.container) return
 
-		/** @type {T} */
-		// @ts-ignore
-		const renderArg = { ...this.#renderProps, state: this.state }
+		const { container } = this
 
-		const dynamicFragment = this.#render(renderArg)
+		if (!container) return
+
+		const dynamicFragment = this.#renderWithPlugins()
 
 		if (dynamicFragment.strings == this.#currentFragment?.strings) {
 			// update values
@@ -185,26 +223,33 @@ export class DynamicIsland extends EventTarget {
 			const reusableFragment = this.#fragmentCache.get(dynamicFragment.strings)
 
 			if (reusableFragment) {
-				reusableFragment.restoreIn(this.container)
+				reusableFragment.restoreIn(container)
 				this.#currentFragment = reusableFragment
 				this.#currentFragment.values = dynamicFragment.values
 			} else {
-				dynamicFragment.mount(this.container)
+				dynamicFragment.mount(container)
 				this.#currentFragment = dynamicFragment
 			}
-
 		}
 		this.dispatchEvent(new Event('update'))
 	}
 }
 
-
-// @ts-expect-error This function is typed in the d.ts file
-export function island(setupOrRender, renderFunction) {
+/**
+ * @param {{ state?: StateShape, refs?: RefsShape, plugins?: PluginsShape } | (() => DynamicFragment)} propertiesOrRender
+ * @param {(context: unknown) => DynamicFragment} [renderFunction]
+ */
+export function island(propertiesOrRender, renderFunction) {
 	if (typeof renderFunction == 'function') {
-		return new DynamicIsland(setupOrRender, renderFunction)
+		if (typeof propertiesOrRender == 'object' && propertiesOrRender != null) {
+			if ('refs' in propertiesOrRender || 'plugins' in propertiesOrRender) {
+				return new DynamicIsland(propertiesOrRender, renderFunction)
+			}
+		}
+		return new DynamicIsland({ state: propertiesOrRender }, renderFunction)
 	}
-	return new DynamicIsland(() => ({}), setupOrRender)
+	if (typeof propertiesOrRender == 'function') {
+		return new DynamicIsland({}, propertiesOrRender)
+	}
+	throw new Error('Invalid arguments')
 }
-
-

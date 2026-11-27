@@ -1,6 +1,6 @@
 {
   "name": "@applicvision/frontend-friends",
-  "version": "1.16.3",
+  "version": "2.0.0",
   "description": "Build frontend easily",
   "type": "module",
   "license": "MIT",
@@ -34,6 +34,10 @@
       "types": "./types/src/store.d.ts",
       "default": "./src/store.js"
     },
+    "./plugins": {
+      "types": "./types/src/plugins.d.ts",
+      "default": "./src/plugins.js"
+    },
     "./parse-shape": {
       "types": "./types/src/parse-shape.d.ts",
       "default": "./src/parse-shape.js"
@@ -46,18 +50,23 @@
       "types": "./types/src/attribute-helpers.d.ts",
       "default": "./src/attribute-helpers.js"
     },
-    "./router": "./src/router/router.js",
-    "./base-router": "./src/router/base-router.js",
-    "./browser-router": "./src/router/browser-router.js",
-    "./router/dynamic-island": "./src/router/dynamic-island.js",
-    "./router/router-link": "./src/router/router-link.js"
+    "./router": {
+      "node": {
+        "types": "./types/src/server-router.d.ts",
+        "default": "./src/router/server-router.js"
+      },
+      "default": {
+        "types": "./types/src/browser-router.d.ts",
+        "default": "./src/router/browser-router.js"
+      }
+    }
   },
   "scripts": {
     "tdd": "test-browser --watch test --watch src",
     "node-test": "node --test **/*.nodetest.js",
     "node-tdd": "node --watch --test **/*.nodetest.js",
     "serve-docs": "self-serve docs --base frontend-friends",
-    "build-types": "tsc -p tsconfig.types.json"
+    "serve-example": "node examples/library/server.js"
   },
   "files": [
     "src",
